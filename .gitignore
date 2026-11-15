@@ -2,6 +2,10 @@
 out/
 *.pdf
 *.png
+# 唯一的例外：详情页那张成品图。市场包不收图片文件，两个包的文档都改引
+# https://raw.githubusercontent.com/seahp/number-grid-paint/main/assets/preview.png，
+# 这张图没进仓库，那两个页面就是一片 404。（改版面后用 scripts/shot.py 重截再提交）
+!assets/preview.png
 
 # 打包产物
 dist/

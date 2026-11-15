@@ -152,7 +152,13 @@ def scan_tree(root: pathlib.Path, terms):
     return out
 
 
-def scan_zip(z: pathlib.Path, terms):
+#: 这些后缀的二进制成员是**已知媒体**（成品截图、字体、样张 PDF），没有文本可扫；
+#: 只登记不报警。除此之外任何含 NUL 的成员都当成"包里混进了没人知道是什么的东西"。
+MEDIA_EXT = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.pdf',
+             '.woff', '.woff2', '.ttf', '.otf'}
+
+
+def scan_zip(z: pathlib.Path, terms, media=None):
     out = []
     with zipfile.ZipFile(z) as zf:
         for name in zf.namelist():
@@ -160,6 +166,10 @@ def scan_zip(z: pathlib.Path, terms):
                 continue
             data = zf.read(name)
             if b'\0' in data:
+                if pathlib.PurePosixPath(name).suffix.lower() in MEDIA_EXT:
+                    if media is not None:
+                        media.append(f'{z.name}!{name} ({len(data)} B)')
+                    continue
                 out.append(f'{z.name}!{name} 二进制成员，需人工确认内容')
                 continue
             out += scan_text(data.decode('utf-8', 'replace'), f'{z.name}!{name}', terms)
@@ -167,7 +177,10 @@ def scan_zip(z: pathlib.Path, terms):
 
 
 def audit(targets):
-    """扫一批目标（目录 / zip / 单文件），返回 (命中, 待办, 扫了什么)。
+    """扫一批目标（目录 / zip / 单文件），返回 (命中, 待办, 扫了什么, 说明)。
+
+    命中=必须处理；待办=开发仓库发布前要补的声明（技能包里跑则降级成说明）；
+    说明=不阻断但要点名看一眼的东西（例如包内的图片成员）。
 
     make_dist.py 直接调这个函数，所以这里不含 argparse 与退出码。
     """
@@ -178,38 +191,69 @@ def audit(targets):
     elif not terms:
         todo.append(f'{TERMS.relative_to(ROOT)} 是空的：同上，至少写清要保护哪些词')
 
-    hits, scanned = [], []
+    hits, scanned, media, notes = [], [], [], []
     for t in targets:
         if t.is_dir():
             for sub in sorted(t.rglob('*')):
                 if sub.suffix == '.zip' and sub.is_file():
                     scanned.append(f'zip {sub}')
-                    hits += scan_zip(sub, terms)
+                    hits += scan_zip(sub, terms, media)
             scanned.append(f'dir {t}')
             hits += scan_tree(t, terms)
         elif t.suffix == '.zip':
             scanned.append(f'zip {t}')
-            hits += scan_zip(t, terms)
+            hits += scan_zip(t, terms, media)
         elif t.is_file():
             scanned.append(f'file {t}')
             hits += scan_file(t, t.name, terms)
 
+    if media:
+        # 已知媒体（成品截图/字体）不阻断发布，但必须点名让人看一眼——
+        # "包里多了个没人认识的二进制"和"包里的截图"是两回事，都要看得见。
+        notes.append('包内媒体成员（内容扫不了，确认一眼是什么）：'
+                     + '、'.join(media[:8]) + ('…' if len(media) > 8 else ''))
+
     # 同一个命中会从"目录"和"包内字节"各报一次，去重
-    return list(dict.fromkeys(hits)), todo, scanned
+    return list(dict.fromkeys(hits)), todo, scanned, notes
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('targets', nargs='*', help='目录或 zip；默认 dist/ 下的发布物')
+    ap.add_argument('targets', nargs='*', help='目录或 zip；默认 dist/ 下的发布物，没有 dist/ 就扫当前目录树')
     ap.add_argument('--strict', action='store_true', help='名单词表缺失/为空也算失败')
     ap.add_argument('--json', action='store_true')
     opt = ap.parse_args()
 
-    targets = [pathlib.Path(t) for t in opt.targets] or [ROOT / 'dist']
-    uniq, todo, scanned = audit(targets)
+    if opt.targets:
+        targets = [pathlib.Path(t) for t in opt.targets]
+        # 传了路径却不存在，必须失败：以前会被静默跳过，扫了 0 个目标还回一句"干净，可以发布"
+        missing = [str(t) for t in targets if not t.exists()]
+        if missing:
+            print(f'目标不存在：{"、".join(missing)}\n'
+                  f'（在技能包里跑的话没有 dist/——那层目录是开发仓库的产物。'
+                  f'包内自检请用 `python3 scripts/leak_scan.py` 不带参数。）')
+            sys.exit(1)
+    elif (ROOT / 'dist').exists():
+        targets = [ROOT / 'dist']
+    else:
+        targets = [ROOT]
+        print(f'没找到 {ROOT / "dist"}（开发仓库的打包产物），改成扫当前目录树：{ROOT}\n')
+
+    uniq, todo, scanned, notes = audit(targets)
+    if not scanned:                      # 一条都没扫到不等于干净
+        print('什么都没扫到 → 判为失败（空扫描不算通过）')
+        sys.exit(1)
+
+    # 技能包里没有 redact_terms.txt 是**设计如此**（名单词表只留在开发机），
+    # 所以从包里跑这条命令的人不该被提示"不要发布"。开发仓库里照旧拦。
+    is_package = (ROOT / 'SKILL.md').exists() and (ROOT / 'assets').is_dir() \
+        and not (ROOT / 'dist').exists()
+    if todo and is_package:
+        notes += ['（技能包布局）' + t for t in todo]
+        todo = []
 
     if opt.json:
-        print(json.dumps({'scanned': scanned, 'hits': uniq, 'todo': todo},
+        print(json.dumps({'scanned': scanned, 'hits': uniq, 'todo': todo, 'notes': notes},
                          ensure_ascii=False, indent=2))
     else:
         print(f'== 泄露与脱敏审查 == 扫了 {len(scanned)} 个目标')
@@ -223,6 +267,8 @@ def main():
                 print(f'   …另 {len(uniq) - 80} 处，用 --json 看全')
         else:
             print('\n通用规则（本机路径/用户目录/账号名/邮箱/电话/证件/凭据/UUID/PII 字段）：0 命中')
+        for n in notes:
+            print('  说明:', n)
         if todo:
             print()
             for t in todo:

@@ -20,6 +20,19 @@ top-right corner; it changes both the interface and the printed worksheet).
 英文版：把右上角切到 **EN**，纸面会变成给英语课堂用的本地化措辞（"Stamp Hunt"、
 "Cell Battle"、"Show work"），不是逐字翻译。
 
+## 成品长什么样
+
+上面是工具栏，下面就是打印出来的那张 A4（种子 `20261115`，标准难度包，一页一卷）：
+
+![数格涂涂生成器与一张 A4 成品卷](assets/preview.png)
+
+盘面上每对相邻格涂成对应目标数的颜色，右侧集章表里写着算式；答案页另算一页。
+
+这张图不是设计稿：`python3 scripts/shot.py <输出.png> '?size=10&copies=1&seed=20261115' all 1560`
+在无头浏览器里把真实页面截下来——仓库里那张 `assets/preview.png` 就是这么来的
+（市场包不收图片文件，所以它只随仓库出门，包里的文档引的是它在 GitHub 上的绝对地址）。
+改了版面或配色，重跑这条命令重截一次。
+
 ## 这个游戏练什么
 
 | 玩法 | 说明 |
@@ -70,31 +83,36 @@ top-right corner; it changes both the interface and the printed worksheet).
 
 ## 校验（给要改代码的人）
 
+技能包里的 `scripts/` 就是下面这些；市场那边只发 HTML 的精简包不带脚本，
+要跑校验请从源码仓库取。
+
 ```bash
 node --version                     # 只需要 Node 和 Python3 + Edge/Chrome
 node scripts/verify.mjs            # 出题内核 76 项断言（数学红线，不依赖浏览器）
 python3 scripts/env.py             # 打印脚本们找到的 HTML 与浏览器路径
+python3 scripts/doc_check.py       # 文档 ↔ 实际文件：照文档敲的每条命令都得成立
 python3 scripts/size_probe.py --lang en     # 144 个版面组合 ×语言：不溢出、不折行、不压格
 python3 scripts/width_probe.py 1440 760 400 lang=en   # 窗口多宽都解出同一个格子
 python3 scripts/i18n_probe.py      # 双语：占位符、单复数、漏翻、撑爆列
 python3 scripts/pdf_check.py       # 12 组版面导出 PDF，数页数、查空白页
-python3 scripts/pdf_export.py '?size=10&lang=en' out/样张.pdf
-python3 scripts/shot.py out/屏显.png '?size=10&lang=en' all
+python3 scripts/pdf_export.py '?size=10&lang=en' out/样张.pdf   # 仓库里：out/ 是开发产物目录，不进包
+python3 scripts/shot.py out/屏显.png '?size=10&lang=en' all     # 仓库里：同上，out/ 只在开发机
 ```
 
-开发脚本里的 HTML 路径和浏览器路径都由 `scripts/env.py` 统一解析，换机器不用改代码：
-设 `GRIDPAINT_SRC` / `GRIDPAINT_BROWSER` 即可。
+`env.py` 认两种目录布局：源码仓库里主 HTML 在根目录，技能包里在 `assets/` 下，
+`verify.mjs` 和各探针都走同一套解析，所以从包里解压出来直接跑就行，不用改路径。
+换机器也不用改代码：设 `GRIDPAINT_SRC` / `GRIDPAINT_BROWSER` 即可。
 
 ## 打包与上架
 
 ```bash
-python3 scripts/make_dist.py --strict
+python3 scripts/make_dist.py --strict   # 仓库里的打包脚本
 ```
 
-出三份物料：`dist/repo/`（GitHub 仓库）、`dist/number-grid-paint-skillhub.zip`、
+出三份物料：`dist/repo/`（GitHub 仓库目录）、`dist/number-grid-paint-skillhub.zip`、
 `dist/number-grid-paint-openplatform.zip`（WorkBuddy 开放平台，精简包）。
 preflight 会拦下缺文件、缺许可全文、HTML 里出现网络请求、frontmatter 字段不全、
-以及**未脱敏内容**这几类问题。
+**文档与实际文件不一致**、以及**未脱敏内容**这几类问题。
 
 发布纪律：**`push` / 上传 / `publish` 之前先跑泄露与脱敏审查，退出码 0 才出门。**
 
@@ -103,8 +121,8 @@ python3 scripts/leak_scan.py dist/repo     # 扫真正要发出去的那份（zi
 ```
 
 它查本机路径、用户目录、账号名、邮箱、电话、证件号、token、私钥、带凭证的 URL、
-UUID、教育类 PII 字段名，外加 `scripts/redact_terms.txt` 里你声明的名单词
-（真实人名/班级/校名/内部代号——这份词表只留本地，不打进任何包）。
+UUID、教育类 PII 字段名，外加 `scripts/仓库里的 redact_terms.txt` 里你声明的名单词
+（真实人名/班级/校名/内部代号——这份词表只留开发机，不打进任何包）。
 
 三个平台上架进度与各自的坑见 [`SUBMISSION.md`](SUBMISSION.md)；
 SkillHub 已上线，可直接装：
@@ -113,15 +131,26 @@ SkillHub 已上线，可直接装：
 skillhub install number-grid-paint --namespace user_1db801dd --dir ~/.workbuddy/skills
 ```
 
+## 发布到三个市场
+
+打包与上架的完整流程（三份产物各自的差别、平台按扩展名过滤、3MB 上限、
+frontmatter 字段集、以及"出门前先跑泄露审查"这条纪律）写在
+[`references/publishing.md`](references/publishing.md) 里——这一份技能包里就带着，
+不需要在开发机上才看得到。
+
 ## 署名
 
 按要求署名即可自由转发与改编（非商业、相同方式共享）：
 
 > Number Grid Paint / 数格涂涂 by **粉笔与代码**，
 > 许可证 CC BY-NC-SA 4.0，https://github.com/seahp/number-grid-paint
->
-> （仓库地址按本仓库计划名写好，**以你实际创建的仓库为准**；不一致时改这一处和
-> HTML 顶部注释里的 `署名与出处` 一行。）
+
+这一行和 HTML 顶部注释里的 `署名与出处` 已经对齐，仓库是活的：
+[`seahp/number-grid-paint`](https://github.com/seahp/number-grid-paint)。
+改名或换 owner 时两处一起改。
+
+版本号与署名一致性由 `python3 scripts/doc_check.py` 检查（它同时核对
+SKILL.md 的 `version`、CHANGELOG.md 顶部条目和 HTML 里的 `BUILD` 号）。
 
 ## 许可证
 
@@ -155,14 +184,18 @@ lets you nudge the cell size by hand.
 
 Language switch (top right) changes the interface *and* the printed page. The English
 text is written for English-language classrooms rather than translated word for word.
+The screenshot above is a real render of the page, not a mock-up.
 
 Everything runs locally: no network requests, no third-party scripts, no analytics. The
 only storage is a `localStorage` entry remembering your language choice.
 
 To verify or modify: `node scripts/verify.mjs` runs 76 kernel assertions; the Python
 probes in `scripts/` check layout overflow, window-width independence, bilingual
-placeholders/plurals, and PDF page counts. Paths are resolved by `scripts/env.py`
-(`GRIDPAINT_SRC`, `GRIDPAINT_BROWSER`).
+placeholders/plurals, and PDF page counts; `python3 scripts/doc_check.py` checks that
+every command and path quoted in these docs actually resolves **in the layout you are
+reading it in** (source repository: HTML at the root; skill package: HTML under
+`assets/`). Paths are resolved by `scripts/env.py` (`GRIDPAINT_SRC`, `GRIDPAINT_BROWSER`),
+so unzipping the package and running the commands as written works without edits.
 
 To package for publishing: `python3 scripts/make_dist.py --strict` builds a GitHub repo
 directory plus two marketplace zips (SkillHub and WorkBuddy open platform, which want
@@ -173,9 +206,9 @@ One rule before anything goes out: **run the leak & redaction audit and require 
 `python3 scripts/leak_scan.py dist/repo` checks hard-coded home/user paths, account names,
 emails, phone numbers, ID numbers, tokens and private keys, credentialed URLs, UUIDs and
 education-PII field names, plus a local denylist of real names/classes/schools you declare
-in `scripts/redact_terms.txt` (that file never ships inside any package). Matched lines are
+in `scripts/仓库里的 redact_terms.txt` (that file never ships inside any package). Matched lines are
 printed redacted, so the audit itself can't become a second leak. It is wired into
-`make_dist.py` on both sides — source tree before building, zip bytes after.
+the build script on both sides — source tree before building, zip bytes after.
 
 The SkillHub listing is live: `skillhub install number-grid-paint --namespace user_1db801dd`.
 

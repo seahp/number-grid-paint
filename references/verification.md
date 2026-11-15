@@ -105,12 +105,12 @@ leak_scan  源码侧 + 发布物 + 线上包                 0 命中（第 8 �
 `KeyError: 'duel'`，现在直接说「duel 是 --mode 的取值，flag 写串了」——全量扫描要跑十几次，
 静默少跑一套矩阵比报错更难发现。
 
-## 7. `make_dist.py` — 发布物料与出门闸门
+## 7. `make_dist.py` — 发布物料与出门闸门（仓库专用）
 
 ```bash
-python3 scripts/make_dist.py            # 出 dist/（占位署名之类只提示，不拦）
-python3 scripts/make_dist.py --strict   # 提交前最后一次：待办升级成阻断
-python3 scripts/make_dist.py --samples  # 顺带用无头浏览器导两张样张 PDF
+python3 scripts/make_dist.py            # 仓库里跑：出 dist/（占位署名之类只提示，不拦）
+python3 scripts/make_dist.py --strict   # 仓库里跑：提交前最后一次，待办升级成阻断
+python3 scripts/make_dist.py --samples  # 仓库里跑：顺带用无头浏览器导两张样张 PDF
 ```
 
 它先跑 preflight，再产出 `dist/repo/`（GitHub 仓库）、`dist/skill/…`（SkillHub 包，含探针脚本）、
@@ -164,9 +164,9 @@ python3 scripts/leak_scan.py --strict        # 名单词表没声明也算失败
 十类通用痕迹：本机家目录、他人/本机用户目录、账号名、邮箱、手机号与固话、身份证号、
 token 与私钥（`ghp_`/`github_pat_`/`skh_`/`sk-`/`AKIA`/`xox*`/`ya29.`/`ntn_` 与硬编码口令）、
 带凭证的 URL、UUID、教育类 PII 字段名。
-第十类之外还有 `scripts/redact_terms.txt`：**只有你知道不能公开什么**——真实人名、班级、
+第十类之外还有 仓库里的 `scripts/redact_terms.txt`：**只有你知道不能公开什么**——真实人名、班级、
 校名、内部代号，一行一个词，命中就报。这份词表本身是敏感信息集合，所以它不进任何发布物，
-`make_dist.py` 出门前专门检查它有没有混进包里。
+仓库里的 `make_dist.py` 出门前专门检查它有没有混进包里。
 
 三个设计上的讲究，都是踩过之后加的：
 

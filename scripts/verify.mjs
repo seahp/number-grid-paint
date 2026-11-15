@@ -1,12 +1,41 @@
 #!/usr/bin/env node
 /* 数格涂涂 · 独立数学校验
    直接从 HTML 里抽 KERNEL 段运行，保证"校验的就是页面在用的那份逻辑"。
-   用法：node scripts/verify.mjs [html路径] */
+   用法：node scripts/verify.mjs [html路径]
+   不给路径时按"仓库布局 → 技能包布局"自动找，所以在 GitHub 仓库根、在 skillhub
+   install 下来的技能包里，同一条 `node scripts/verify.mjs` 都能跑（1.0.0 那轮只认
+   仓库根，技能包里就报 ENOENT）。 */
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const FILE = process.argv[2] || path.join(process.cwd(), '数格涂涂_生成器.html');
+const MAIN = '数格涂涂_生成器.html';
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+function resolveFile() {
+  if (process.argv[2]) return process.argv[2];
+  const roots = [process.cwd(), path.join(HERE, '..')];
+  for (const r of roots) {
+    for (const rel of [MAIN, path.join('assets', MAIN)]) {
+      const p = path.join(r, rel);
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  for (const r of roots) {
+    for (const d of [r, path.join(r, 'assets')]) {
+      if (!fs.existsSync(d)) continue;
+      const hit = fs.readdirSync(d).find(f => f.includes('生成器') && f.endsWith('.html'));
+      if (hit) return path.join(d, hit);
+    }
+  }
+  console.error(`找不到 ${MAIN}。技能包里它在 assets/ 下、仓库里在根目录；` +
+                `也可以显式传路径：node scripts/verify.mjs assets/${MAIN}`);
+  process.exit(1);
+}
+
+const FILE = resolveFile();
+console.log('校验对象：' + FILE);
 const html = fs.readFileSync(FILE, 'utf8');
 const m = html.match(/\/\* ===== KERNEL START ===== \*\/([\s\S]*?)\/\* ===== KERNEL END ===== \*\//);
 if (!m) { console.error('找不到 KERNEL 段，校验中止'); process.exit(1); }

@@ -2,12 +2,15 @@
 """版面效果截图（屏显态，非打印态）。
 
 用法：
-    python3 scripts/shot.py out/名字.png '?size=10&ans=1&...' [all|answer|student]
+    python3 scripts/shot.py out/名字.png '?size=10&ans=1&...' [all|answer|student] [窗口高]
 
 第三个参数决定 isolate：
     all     工具栏一起截（默认）
     answer  只留答案页（把学生页藏起来）——用来确认答案页排版
     student 只留学生页
+
+第四个参数是窗口高度（px），不给就按页数推。要一张"工具栏 + 整卷"的宣传图时
+显式给 1600 左右，免得集章表被截掉半行。
 
 视口宽度必须 >900px，否则命中 @media screen and (max-width:900px) 的 scale(.5)
 预览规则，图里的页盒会缩成半张，截出来不好看。
@@ -30,6 +33,7 @@ def main():
     out = pathlib.Path(sys.argv[1])
     qs = sys.argv[2] if len(sys.argv) > 2 else ''
     iso = sys.argv[3] if len(sys.argv) > 3 else 'all'
+    hgt = int(sys.argv[4]) if len(sys.argv) > 4 else 0
     css = HIDE[iso]
     src = SRC.read_text(encoding='utf-8')
     extra = f'<style>body{{background:#fff;margin:0}}{css}</style>'
@@ -37,7 +41,7 @@ def main():
     j = src.rfind('</head>')
     tmp.write_text(src[:j] + extra + src[j:], encoding='utf-8')
     # 页盒 210×297mm ≈ 794×1123px；两页竖排留点余量
-    h = 1250 if 'copies=1' in qs or iso != 'all' else 2400
+    h = hgt or (1250 if 'copies=1' in qs or iso != 'all' else 2400)
     # 新版 headless 只认 --screenshot=path 这种写法；
     # 拆成 "--screenshot" path 会被当成第二个 target，直接报 Multiple targets are not supported。
     r = subprocess.run([EDGE, '--headless', '--disable-gpu', '--hide-scrollbars',
