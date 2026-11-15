@@ -39,8 +39,8 @@ python3 scripts/leak_scan.py --strict        # 名单词表没声明也算失败
 
 | 平台 | 状态 | 说明 |
 | --- | --- | --- |
-| GitHub | **v1.0.2 已上线** | https://github.com/seahp/number-grid-paint （Public，`main`，提交 `deb1811`）；线上 tarball 拉回来重扫 **0 命中**，`assets/preview.png` / 主产物 / README 三条 raw 地址都是 200，见第 3 节 |
-| SkillHub | **线上仍是 v1.0.0；本轮发 1.0.2** | https://skillhub.cn/skills/user_1db801dd/number-grid-paint （skillId 322080）。1.0.1 那次上传被 `400 不允许的文件类型: assets/preview.png` 整包拒收，**但版本号占上了**——`install` 下来那份 `SKILL.md` 写着 `version: 1.0.0`，即 1.0.1 是个空号。所以这一轮换 1.0.2 发，不删条目，见第 5 节 |
+| GitHub | **v1.0.2 已上线** | https://github.com/seahp/number-grid-paint （Public，`main`，提交 `ae5ee92`）；线上 tarball 拉回来重扫 **0 命中**，`assets/preview.png` / 主产物 / README 三条 raw 地址都是 200，见第 3 节。中途你在 GitHub 上直接删过 README 里"出三份物料…"那两句，已把同样的删除落回源文档，下次重建不会又长回来 |
+| SkillHub | **1.0.2 已 publish，索引还在刷** | https://skillhub.cn/skills/user_1db801dd/number-grid-paint （skillId 322080，**没删条目、URL 不变**）。`✓ Published: skillId=322080`；但发布当场 `search` 仍显示 `version: 1.0.1`、`install` 下来的还是 1.0.0 的文件（17 个）——安全扫描排队，属正常延迟，等刷新后再回扫一次。1.0.1 那次上传被 `400 不允许的文件类型: assets/preview.png` 整包拒收，**但版本号占上了**，即 1.0.1 是个空号。详见第 5 节 |
 | WorkBuddy 开放平台 | **1.0.0 被驳回，整改后的 zip 已备好待重投** | 技能ID `os_e14f55c59b56dd6c`，分类「教育学习」，**免费**（未勾付费/内购）。驳回原文与整改见第 4 节 |
 
 线上那三份是**做这套审查之前**的物料打的包。评测回来了两条意见，都属于"文档与包不一致"，
@@ -394,10 +394,12 @@ python3 scripts/shot.py /tmp/屏显.png '?size=10&lang=en' all
 ```
 
 13 条命令**全部退出码 0**，包里那条"找不到文件"的路子已经堵死。
-精简包（`number-grid-paint-openplatform.zip`，7 个文件）单独核对：SKILL.md 渲染后
-没有残留布局标记、只提到包里真有的路径（`assets/数格涂涂_生成器.html`、
-`assets/preview.png`、`references/rules-and-generation.md`、`README.md`、`CHANGELOG.md`、
-`LICENSE.txt`），frontmatter 是官方 9 字段、`version: 1.0.2`。
+精简包（`number-grid-paint-openplatform.zip`，6 个文件：HTML + README / SKILL.md /
+CHANGELOG.md / LICENSE.txt + `references/rules-and-generation.md`）单独按审核员的机械解析
+重演了一遍：把 SKILL.md 里每条反引号包住的**文件名**抠出来逐个查存在——`assets/数格涂涂_生成器.html`、
+`references/rules-and-generation.md`、`README.md`、`CHANGELOG.md`、`LICENSE.txt`，**全包无缺**；
+渲染后没有残留布局标记，没有 `scripts/` 这种目录写法（平台会把它也当条目去找），
+也不带图片（市场包不收）；frontmatter 是官方 9 字段、`version: 1.0.2`。
 
 **没检查**：开放平台的第二次审核结论（要重投之后才有）、SkillHub 线上详情页渲染效果
 （发出去之后我用 `install` 拉回来核，不在本地臆测）、
