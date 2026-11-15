@@ -40,8 +40,8 @@ python3 scripts/leak_scan.py --strict        # 名单词表没声明也算失败
 | 平台 | 状态 | 说明 |
 | --- | --- | --- |
 | SkillHub | **已上线 v1.0.0** | https://skillhub.cn/skills/user_1db801dd/number-grid-paint （skillId 322080）；`skillhub install` 已跑通，签名校验通过，内容指纹 `ef3e1ecf…10bee4` |
-| GitHub | **待凭据** | 钥匙串里的 PAT 返回 `401 Bad credentials`，`ssh -T git@github.com` 返回 `Permission denied (publickey)`，本机没有 `gh`。需要你给一条能用的凭据，见第 3 节 |
-| WorkBuddy 开放平台 | **待你登录 + 入驻认证** | 打开 https://open.workbuddy.cn 会停在登录页（微信扫码 / 手机号 / QQ / 邮箱 / SSO），登录后首次进控制台要求选认证方式（个人 / 企业 / 其他组织机构）。实名与身份认证只能你本人做，见第 4 节 |
+| GitHub | **已上线 v1.0.0** | https://github.com/seahp/number-grid-paint （Public，`main`，22 个文件）；线上 tarball 拉回来重扫 **0 命中**，见第 3 节 |
+| WorkBuddy 开放平台 | **已提交审核** | 技能ID `os_e14f55c59b56dd6c`，版本 1.0.0，分类「教育学习」，**免费**（未勾付费/内购）；平台提示 7 个工作日内出结果，见第 4 节 |
 
 SkillHub 上那一份是**做这套审查之前**的物料打的包，但我把线上下载回来的包重扫过：**0 命中**，
 签名与内容指纹一致，所以**不重发**（用户 2026-11-15 定：只要没问题就不用重发）。
@@ -87,39 +87,59 @@ python3 scripts/make_dist.py --strict      # 缺文件/网络请求/frontmatter 
 
 ---
 
-## 3. GitHub（待你给凭据）
+## 3. GitHub（已上线，记录一条能复用的推法）
 
-远端仓库先在 https://github.com/new 手动建（**Public**，不初始化 README，避免首推冲突）。
-名称建议 `number-grid-paint`，About 填 `Printable math-game worksheet generator · single offline HTML · zh/en`，
-Topics：`math, education, worksheet, printable, offline, single-file, chinese-english`。
+仓库：**Public**、不初始化 README（避免首推冲突）、名称 `number-grid-paint`。
+这次是用 API 建的，省得手动点：
 
-凭据二选一：
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"number-grid-paint","description":"…","private":false,
+       "has_issues":true,"has_wiki":false,"auto_init":false}' \
+  https://api.github.com/user/repos
+```
 
-- **PAT**：https://github.com/settings/tokens → Fine-grained 或 classic（要 `repo` 权限）。
-  给我之后我只用它跑一次 `git push`，不写进任何文件、不进 commit、也不进 remote URL。
-- **SSH**：把本机那把 `id_ed25519_cmw_push2.pub` 加到账号的 SSH Keys，
-  然后 `ssh -T git@github.com` 应该回 `Hi seahp!`。
+**凭据这条路上次的坑**：`git credential fill` 读到的是钥匙串里 **internet 类**那条
+`github.com / <用户名>`，装的是一把早已失效的旧 PAT，所以怎么推都是
+`401 / Invalid username or token`；而 **GitHub Desktop 登录后写的是 generic 类**，
+service `GitHub - https://api.github.com`，那条 token 是活的（`repo, user, workflow`）。
+两条记录同名不同类，osxkeychain 只会挑失效的那条——这就是本机没有 `gh`、
+`ssh -T` 又 publickey 拒绝之外，真正卡住的原因。
 
-审过再推（第 0 节的纪律）：
+所以推之前先确认钥匙串里到底哪条有效（只看长度和前缀，别打印值本身）：
+
+```bash
+security find-generic-password -s 'GitHub - https://api.github.com' -a <用户名> -w | wc -c
+curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(…)" https://api.github.com/user
+```
+
+用法是**一次性的临时 helper**：脚本里不含密钥，被调用时才去钥匙串取值；
+先把 helper 链清空再挂上它（顺序敏感，只 `-c credential.helper=<路径>` 的话
+osxkeychain 会抢先用那条失效凭据）。token 不进 `.git/config`、不进 remote URL、
+不进 commit、也不落盘。
 
 ```bash
 python3 scripts/leak_scan.py dist/repo            # 退出码必须是 0
 cd dist/repo
 git init -b main
 git add -A
-git commit -m "数格涂涂 v1.0.0：单文件离线数学涂色游戏卷生成器（中英双语）"
-git remote add origin git@github.com:seahp/number-grid-paint.git   # 或 https 形式
-git push -u origin main
+git -c user.name=<用户名> -c user.email=<noreply 地址> commit -m "…"
+git remote add origin https://github.com/<用户名>/number-grid-paint.git   # 干净 URL，不带凭据
+git -c credential.helper= -c credential.helper=/tmp/gh_cred.sh push -u origin main
 ```
 
 **commit 作者邮箱也会被爬**：本机 git 全局 `user.email` 是你的个人邮箱，
 直接 commit 会把它写进公开历史（爬 GitHub 邮箱是垃圾邮件的老路子）。
-在这一份干净副本里改用 GitHub 的 noreply 地址：
+在这一份干净副本里改用 GitHub 的 noreply 地址——推荐 `settings/admin`
+里 "Keep my email addresses private" 显示的那种**带数字 ID 前缀**的形式，
+纯用户名那种在部分统计里不归属你：
 
 ```bash
-git -c user.email=<你的用户名>@users.noreply.github.com commit -m "…"
-# 你自己的 noreply 地址在 https://github.com/settings/admin（Keep my email addresses private）
+git config user.email "<数字ID>+<用户名>@users.noreply.github.com"
 ```
+
+推完别只看本地：把线上的 tarball 拉回来重扫一次（第 0 节的「线上要再扫一次」），
+再确认 `raw.githubusercontent.com` 上主产物 200。这次的结果记在第 1 节表里。
 
 `.gitignore` 已排除 `out/`、`dist/`、`*.pdf`、`*.png`。历史里一旦混进真实班级/学生信息
 就删不干净（force push 也留在 reflog 和平台缓存里），所以别在开发目录里直接 `git init`，
@@ -232,8 +252,12 @@ CC BY-NC-SA 4.0 意味着别人可以免费转发和改编，但必须署名、�
 检查过（本地，见 `references/verification.md`）：数学内核 76 项、版面 1728 组合、
 多窗口宽度、双语探针、12 组 PDF、zip 结构与大小、frontmatter 字段、
 `skillhub publish --dry-run`、**泄露与脱敏审查（含两条负向自测）**。
-线上也复查过：SkillHub 的包能装、签名与内容指纹一致。
+线上也复查过：SkillHub 的包能装、签名与内容指纹一致；GitHub 的 `main` tarball
+拉回来重扫 **0 命中**，`raw.githubusercontent.com` 上主产物与 README 都是 200。
 
-**没检查**：GitHub 与开放平台实际的表单字段名和审核口径（会变），
-以及 GitHub Pages 在你账号上的可用状态。上传时以页面实际提示为准；
+**没检查**：开放平台的审核结论（提交后 7 个工作日内出，还没回）、
+以及 GitHub Pages 在你账号上的可用状态——仓库现在是**源码托管**，
+没有一个点开即玩的在线地址。想让老师不下载也能用，就把 Pages 指到
+`main` 的根目录，入口用 `数格涂涂_生成器.html`；这一步要你点头再做，
+因为它是第二次对外改动，不是发布仓库本身要求的。
 哪一步卡住把那一步的报错原文给我，我按报错调包。
