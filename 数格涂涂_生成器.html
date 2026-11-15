@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<!--
+  数格涂涂 / Number Grid Paint
+  单文件、离线、无依赖的可打印数学游戏生成器（10 以内加减法 + 表内乘法口诀）。
+
+  License / 许可证：CC BY-NC-SA 4.0（署名 - 非商业性使用 - 相同方式共享）
+    全文见同目录 LICENSE.txt；英文摘要 https://creativecommons.org/licenses/by-nc-sa/4.0/
+    你可以自由复制、分发、改编本文件用于非教学收费用途，但必须署名，且改编作品
+    必须以同样的许可证发布。
+
+  Copyright / 版权所有：© 2026 粉笔与代码（Number Grid Paint / 数格涂涂）
+    署名与出处：https://github.com/seahp/number-grid-paint
+
+  本文件不需要构建、不需要网络、不需要 Node：双击用浏览器打开即可使用。
+  It is a single HTML file: no build step, no network, no runtime dependencies.
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>数格涂涂 · 一年级 10 以内加减法涂色游戏生成器</title>
+<style>
+:root{
+  --ink:#26313d; --ink2:#5b6875; --line:#c8d2dc; --line2:#eef2f6;
+  --accent:#2f6fb3; --warm:#e8842a; --mul:#7a4fa3;
+  --g:7px;    /* 块内行距：四块选项（和/差、积、份数·种子·版面）统一用这一个 */
+  --gb:20px;  /* 块与块的左右间距 */
+}
+*{box-sizing:border-box}
+body{margin:0;background:#eef1f5;color:var(--ink);
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+/* ---- 工具栏 ---- */
+.toolbar{position:sticky;top:0;z-index:9;background:#fff;border-bottom:1px solid var(--line);
+  padding:11px 20px 9px;box-shadow:0 1px 6px rgba(20,40,60,.06)}
+.toolbar h1{margin:0 0 8px;font-size:17px;letter-spacing:.5px}
+.toolbar h1 small{font-size:12px;color:var(--ink2);font-weight:400;margin-left:8px}
+.toprow{display:flex;justify-content:space-between;align-items:baseline;gap:10px 24px;flex-wrap:wrap;max-width:1500px;margin:0 auto}
+.toprow .hint{text-align:right;flex:1 1 200px}
+/* 语言开关放在标题行最右：它改的是"整页读什么语言"，不属于下面四块选项。
+   .toprow 是 align-items:baseline，按基线对齐会把分段按钮拽歪，所以单独居中。 */
+.toprow .langseg{flex:0 0 auto;align-self:center}
+/* 切英文后换成系统无衬线：PingFang 那一串是中文字体栈，英文用它只是绕路。
+   页眉大标题字距收回 0——21pt 再拉 1px，"Grid Paint" 会顶到 meta 那一栏。 */
+html[lang="en"] body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+html[lang="en"] .hd .ttl{letter-spacing:0}
+/* 英文目标标签（"Prod 81"）比「积=81」宽，标签字号收半档，配合上面加宽的标签列；
+   算式提示格 .eq 是符号（□+□=7），两种语言一样宽，不动。 */
+html[lang="en"] .tt{font-size:10pt}
+html[lang="en"] .score.tight .tt{font-size:9pt}
+.row{display:flex;flex-wrap:wrap;gap:12px var(--gb);align-items:flex-start;margin:0 auto 6px;max-width:1500px}
+.fset{border:1px solid var(--line2);border-radius:10px;padding:6px 10px 8px;margin:0}
+.fset legend{font-size:12px;color:var(--ink2);padding:0 4px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:6px 11px;font-size:13px;cursor:pointer;color:var(--ink2)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent);color:#fff}
+.seg.mini button{padding:3px 8px;font-size:12px}
+/* 份数那一组：行距一律走 --g（旧的 .btns+.btns{margin-top:5px} 和 .tip{4px} 两套并掉） */
+.fset.out>*+*{margin-top:var(--g)}
+.fset.out label{font-size:12.5px}
+.chips{display:flex;gap:4px;flex-wrap:wrap;max-width:320px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:6px;font-size:11.5px;
+  padding:3px 0;min-width:22px;text-align:center;cursor:pointer;line-height:1;color:var(--ink2);
+  font-variant-numeric:tabular-nums}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+#chipsDiff .chip.on{background:var(--warm);border-color:var(--warm)}
+#chipsMul{max-width:464px}
+#chipsMul .chip.on{background:var(--mul);border-color:var(--mul)}
+.tgtcol{display:flex;flex-direction:column;gap:var(--g)}
+.fset.mul{max-width:486px}
+.tip{font-size:11.5px;color:var(--ink2);margin-top:var(--g);line-height:1.5;max-width:464px}
+.sidecol{display:flex;flex-direction:column;gap:6px;flex:1 1 330px;min-width:288px;max-width:612px}
+/* 换一批 / 打印 竖着贴在 fieldset 右侧，不再单独占一行：工具栏少一行。
+   按钮缩到 12.5px、两枚等宽，整列垂直居中；窄窗口装不下时 .outrow 折行，
+   按钮退回 fieldset 下面（就是原来的摆法），不会挤压份数那一组。 */
+.outrow{display:flex;gap:6px;align-items:stretch;flex-wrap:wrap}
+.outrow .fset.out{flex:1 1 180px;min-width:0;max-width:max-content}
+/* 三个数都得留着：basis 180 是"折行判定"用的（写 max-content 436 的话，1280 视口下
+   436+6+100>402 会被判成放不下、按钮掉到 fieldset 下面）；grow 1 让它吃掉剩余宽度；
+   max-width:max-content 再把 grow 封顶在"最长那一行"上——右侧那 195px 空白就是这么收掉的。 */
+.act{display:flex;flex-direction:column;gap:var(--g);flex:0 0 auto;align-items:stretch;justify-content:center}
+.act .btn{padding:6px 12px;font-size:12.5px;border-radius:8px;white-space:nowrap}
+.act .btn.sec{padding:5px 12px;font-size:12.5px}
+.fset.out .btns{gap:8px}
+.fset.out label{white-space:nowrap}
+.fset.pack{flex:1 1 470px}
+.fset.out{flex:0 0 auto}
+.fset.out input[type=number]{width:84px;padding:4px 5px}
+.fset.out #copies{width:44px}
+.presets2{margin-top:var(--g)}
+.presets button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.presets2 button.on{background:var(--mul);border-color:var(--mul);color:#fff}
+.btns{display:flex;gap:9px;align-items:center;flex-wrap:wrap;font-size:13px}
+.btn{border:0;border-radius:9px;padding:9px 16px;font-size:14px;cursor:pointer;font-weight:600}
+.btn.pri{background:var(--accent);color:#fff}
+.btn.sec{background:#fff;color:var(--accent);border:1px solid var(--accent);padding:5px 11px;font-size:13px}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.presets button{border:1px solid var(--line);background:#fff;border-radius:20px;flex:1 1 auto;
+  padding:5px 11px;font-size:12.5px;cursor:pointer;color:var(--ink2);text-align:center}
+.presets button:hover{border-color:var(--accent);color:var(--accent)}
+input[type=number]{width:84px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;font-size:13px}
+.hint{font-size:12px;color:var(--ink2)}
+.hint b{color:var(--ink)}
+.hint .lnk{border:0;background:none;padding:0;margin-left:3px;font-size:12px;cursor:pointer;
+  color:var(--accent);text-decoration:underline}
+.stage{padding:22px 0 60px;display:flex;flex-direction:column;align-items:center;gap:22px}
+.fail{padding:44px;font-size:15px;color:#d64541;line-height:2;max-width:720px}
+
+/* ---- A4 ---- */
+/* 页边距上下各 12mm、左右 13mm，覆盖家用/办公打印机常见的 5–12mm 不可打印区。
+   屏显时页盒就是整张 A4（210×297），边距由 .sheet 的内边距画出；
+   打印时边距改由 @page 负责，页盒收缩成版心 184×272mm、内边距清零——两种模式下
+   内容区尺寸基本一致（打印少 1mm，留给分页余量），答案页跨页时续页顶部同样有 12mm 边距。 */
+.sheet{width:210mm;height:297mm;background:#fff;padding:12mm 13mm 13mm;
+  box-shadow:0 3px 16px rgba(20,40,60,.13);position:relative;display:flex;flex-direction:column}
+.sheet.answers{height:auto;min-height:297mm}
+.hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid var(--ink);padding-bottom:2mm}
+.hd .ttl{font-size:21pt;font-weight:800;letter-spacing:1px}
+.hd .ttl em{font-style:normal;color:var(--accent)}
+.hd .sub{font-size:9pt;color:var(--ink2);margin-top:1mm}
+.hd .sub b{color:var(--accent);font-weight:700}
+.meta{font-size:9pt;color:var(--ink2);text-align:right;line-height:2.2;white-space:nowrap}
+.meta u{display:inline-block;min-width:20mm;border-bottom:1px solid var(--line);text-decoration:none}
+.rulebar{margin-top:2mm;border:1.3px dashed var(--line);border-radius:3mm;padding:2mm 2.6mm;font-size:9pt;line-height:1.8}
+.rulebar b{color:var(--accent)}
+.rulebar .tag{display:inline-block;background:var(--accent);color:#fff;border-radius:2mm;padding:0 1.5mm;font-size:8.5pt;margin-right:1.4mm}
+.diag{display:inline-block;vertical-align:middle;margin:0 1.6mm;white-space:nowrap}
+/* 说明块分两段：单栏时两段各占一行（和原来用 <br> 隔开一样），
+   版面紧张时整块换成两栏——一段一栏，"怎么玩+示范"在左、"三条约定"在右，
+   高度 32.6mm→22.8mm，省下的 10mm 全给盘面。break-inside:avoid 保证示范小图
+   和三条约定都不会被劈到两栏里。 */
+.rulebar .rseg{break-inside:avoid;-webkit-column-break-inside:avoid}
+.rulebar.tight{column-count:2;column-gap:5mm;font-size:8.2pt;line-height:1.5}
+.diag table{border-collapse:collapse;display:inline-table;vertical-align:middle}
+.diag td{width:4.6mm;height:4.6mm;border:1px solid var(--ink);text-align:center;
+  font-size:8pt;font-weight:700;background:#fff;padding:0}
+.diag td.f{background:#dfeaf6}
+.diag td.g{background:#f4f7fa;border-color:var(--line);color:#c2ccd6;font-weight:400}
+.diag span{font-size:8.5pt;color:var(--ink2);margin-left:1.2mm}
+.boardzone{margin-top:2mm;display:flex;justify-content:center}
+.boardbox{flex:0 0 auto}
+/* 关掉集章表和页脚后，下方没有人占位，剩下的纸全堆在盘面下面很难看。
+   这时用上下 auto 外边距把盘面在版心里居中（页脚还开着时由 .ft{margin-top:auto} 顶到底，不居中）。 */
+.sheet.nosink>.boardzone,.half.nosink>.boardzone{margin-top:auto;margin-bottom:auto}
+/* 勾了集章表或页脚时：先把它们钉在页面最下方，中间剩下的空间整个让给盘面。
+   盘面受宽度上限（10×10 最多 17.4mm/格）画不满时，余量上下对半分——
+   数表就"填在中间"，而不是贴着页眉、底下空一截。
+   注意此时 .ft 的 margin-top:auto 必须关掉：两个 auto 会把余量分走，集章表就掉不到最底下。
+   半页的 .sidewrap（盘面+集章表并排）是一个整体，改成上下都 auto，等于在这块区域里居中。 */
+.sheet.fill>.boardzone,.half.fill>.boardzone{margin-top:auto}
+.sheet.fill>.taskzone,.half.fill>.task.mini{margin-top:auto}
+.sheet.fill>.sidewrap,.half.fill>.sidewrap{margin-top:auto;margin-bottom:auto}
+.sheet.fill>.taskzone+.ft,.half.fill>.task.mini+.ft{margin-top:2mm}
+table.board{border-collapse:collapse;table-layout:fixed}
+table.board td{border:1px solid var(--ink);text-align:center;font-weight:700;background:#fff;padding:0}
+table.board td.rl{border:0;font-size:7.5pt;font-weight:400;color:#98a4b0}
+.board-cap{font-size:8pt;color:var(--ink2);margin-top:1mm;text-align:center}
+.taskzone{margin-top:2mm;flex:0 0 auto}
+.task{min-width:0}
+.task h3{margin:0 0 1.5mm;font-size:10.5pt;border-bottom:1.5px solid var(--ink);padding-bottom:1mm}
+.duelrow{display:flex;gap:6mm;align-items:flex-start}
+table.score{border-collapse:collapse;width:100%;table-layout:fixed}
+table.score th,table.score td{border:1px solid var(--line);padding:1.6mm 1.6mm;font-size:9pt;vertical-align:middle}
+table.score th{background:#f3f6f9;font-size:8pt;font-weight:600;color:var(--ink2)}
+table.score.tight th,table.score.tight td{padding:.7mm .9mm;font-size:8.5pt}
+table.score.tight .tt{font-size:9.5pt}
+.tt{font-weight:800;font-size:11pt;white-space:nowrap}
+.dot{display:inline-block;width:3.3mm;height:3.3mm;border-radius:50%;vertical-align:-.4mm;margin-right:1.1mm}
+.eq{font-size:10.5pt;letter-spacing:.3px;color:#b3bec9;text-align:center}
+/* 算式并格（目标太多、单栏太窄时）：提示必须一行写完，折行会把行高顶高一倍。
+   9pt 时 "□×□=81" 连内边距约 16.4mm，是三/四栏能不能塞下的依据。 */
+.eq.narrow{white-space:nowrap;font-size:9pt}
+.ft{margin-top:auto;display:flex;justify-content:space-between;align-items:center;font-size:9pt;color:var(--ink2);
+  border-top:1px solid var(--line2);padding-top:1.5mm}
+.ft b{font-size:11.5pt;color:var(--ink)}
+.legend{font-size:8.5pt;color:var(--ink2);line-height:1.9}
+.legend i{display:inline-block;width:3.2mm;height:3.2mm;border-radius:.6mm;vertical-align:-.3mm;margin-right:1mm}
+.ans-wrap{display:flex;gap:6mm;align-items:flex-start;margin-top:3mm}
+table.pairs{border-collapse:collapse;width:100%;margin-top:3mm;table-layout:fixed}
+table.pairs th,table.pairs td{border:1px solid var(--line);padding:.9mm 1.3mm;font-size:8pt;text-align:left;vertical-align:top}
+table.pairs th{background:#f3f6f9;color:var(--ink2);font-weight:600}
+table.pairs td.n{font-weight:700}
+.plist{line-height:1.7}
+.note{font-size:8.5pt;color:var(--ink2);margin-top:2mm;line-height:1.8;border-left:2px solid var(--line);padding-left:2mm}
+.note b{color:var(--ink)}
+/* ---- 一页两卷（半页一盘，老师从中间裁开）---- */
+.sheet.two{display:flex;flex-direction:column}
+.half{flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+.cut{flex:0 0 auto;display:flex;align-items:center;gap:2.5mm;margin:1.2mm 0;font-size:8pt;color:#8a97a5;letter-spacing:.6px}
+.cut i{flex:1;display:block;border-top:1.4px dashed #9fb0c0}
+.hd.slim{align-items:flex-end;border-bottom:1.5px solid var(--ink);padding-bottom:.8mm;gap:4mm}
+.hd.slim .ttl{font-size:12pt;letter-spacing:.5px;display:inline}
+.hd.slim .sub{display:inline;margin-left:2.5mm;font-size:8pt;color:var(--ink2)}
+.hd.slim .meta{font-size:8pt;line-height:1.5;white-space:nowrap}
+.hd.slim .meta u{min-width:13mm}
+.task.mini{margin-top:1.5mm}
+.sidewrap{margin-top:2mm;display:flex;gap:4mm;align-items:flex-start;justify-content:center}
+.sidewrap .task.mini{margin-top:0;width:76mm;flex:0 0 auto}
+.sidewrap .boardbox{flex:0 0 auto}
+.task.mini h3{margin:0 0 1mm;font-size:9pt;border-bottom:1px solid var(--ink);padding-bottom:.5mm}
+.task.mini table.score th,.task.mini table.score td{padding:.5mm .8mm;font-size:8pt}
+.task.mini .tt{font-size:9pt}
+.task.mini .eq{font-size:9pt}
+.task.mini .eq.narrow{white-space:nowrap}
+.ft.slim{font-size:8pt;padding-top:1mm}
+.ft.slim b{font-size:9.5pt}
+@media print{table.pairs tr{break-inside:avoid}}
+#diag{position:fixed;left:-9999px;top:0}
+
+@page{size:A4 portrait;margin:12mm 13mm}
+@media print{
+  body{background:#fff}
+  .toolbar{display:none}
+  .stage{padding:0;gap:0;display:block}
+  /* 页边距交给 @page，打印时页盒 ≈ 可打印区（184×272mm）。
+     这样答案页跨到第 2 页时，第 2 页顶部同样有 12mm 边距，不会被内容顶穿。
+     高度留 1mm 余量：273mm 与可打印区分毫不差，浏览器 mm→px 舍入了 0.001px
+     就会多吐一张空白页。 */
+  .sheet{box-shadow:none;margin:0;width:184mm;height:272mm;padding:0;
+    page-break-after:always;break-after:page}
+  .sheet.answers{height:auto;min-height:272mm}
+  .sheet:last-child{page-break-after:auto;break-after:auto}
+}
+/* 屏显预览缩小——必须限定 screen：打印时页面宽度只有 695px，
+   写成 @media (max-width:900px) 会连打印一起命中，scale(.5) + 负外边距
+   把每页内容缩成半张、分页错乱，第 2、4 页就成了空白页。
+   比例由 JS 按窗口宽度算（--pv），不再固定 .5：窗口一窄，纸上明明是 17.2mm，
+   屏幕上却只有一半大，很容易被当成"数表被压小了"。负外边距按同一个比例推，
+   k=1 时刚好为 0（宽窗口不缩，也就不需要补偿）。 */
+@media screen and (max-width:900px){.sheet{transform:scale(var(--pv,1));transform-origin:top center;
+  margin-bottom:calc((1 - var(--pv,1)) * -284mm)}}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="toprow">
+    <h1><span data-t="appTitle">数格涂涂</span> <small data-h="appSub">相邻两格凑数涂色 · 10 以内加减法 &amp; 表内乘法口诀</small></h1>
+    <span class="hint" id="stat"></span>
+    <span class="seg mini langseg" data-tt="langTT" id="segLang">
+      <button data-v="zh">中文</button><button data-v="en">EN</button></span>
+  </div>
+  <div class="row">
+    <fieldset class="fset"><legend data-t="gBoard">盘面</legend>
+      <div class="seg" id="segSize"><button data-v="8">8 × 8</button><button data-v="10">10 × 10</button></div>
+    </fieldset>
+    <fieldset class="fset"><legend data-t="gPlay">玩法</legend>
+      <div class="seg" id="segMode"><button data-v="quest" data-t="modeQuest">闯关集章</button><button data-v="duel" data-t="modeDuel">双人抢格</button></div>
+    </fieldset>
+    <fieldset class="fset pack"><legend data-t="gPack">难度包</legend>
+      <div class="presets" id="presets">
+        <button data-p="easy" data-t="pEasy">入门 · 只凑大数</button><button data-p="std" data-t="pStd">标准（推荐）</button>
+        <button data-p="mid" data-t="pMid">进阶 · 小数难找</button><button data-p="hard" data-t="pHard">挑战 · 集齐 1–10</button>
+      </div>
+      <div class="presets presets2" id="presetsMul">
+        <button data-p="m1" data-t="pM1">乘法 · 表内基础</button><button data-p="m2" data-t="pM2">乘法 · 常用口诀</button>
+        <button data-p="m3" data-t="pM3">乘法 · 难口诀</button><button data-p="mix" data-t="pMix">加减混合乘法</button>
+      </div>
+    </fieldset>
+    <fieldset class="fset"><legend data-t="gQuota">每目标要涂</legend>
+      <div class="seg" id="segQuota"><button data-v="1" data-t="q1">1 对</button><button data-v="2" data-t="q2">2 对</button><button data-v="3" data-t="q3">3 对</button><button data-v="4" data-t="q4">4 对</button></div>
+    </fieldset>
+  </div>
+  <div class="row">
+    <div class="tgtcol">
+      <fieldset class="fset"><legend data-t="legSum">目标数 · 两格之和 = t</legend><div class="chips" id="chipsSum"></div></fieldset>
+      <fieldset class="fset"><legend data-t="legDiff">目标数 · 两格之差 = t</legend><div class="chips" id="chipsDiff"></div></fieldset>
+    </div>
+    <fieldset class="fset mul"><legend data-t="legMul">目标数 · 两格之积 = t（表内乘法，可单用或混练）</legend>
+      <div class="chips chipsMul" id="chipsMul"></div>
+      <div class="tip" data-t="mulTip">只列两个一位数相乘的积；11、13、17、19 凑不出；勾乘法后盘内不放 0。</div>
+    </fieldset>
+    <div class="sidecol">
+      <div class="outrow">
+      <fieldset class="fset out"><legend data-t="gOut">份数 · 种子 · 版面</legend>
+        <div class="btns">
+          <input type="number" id="copies" min="1" max="6" value="1"> <span data-t="copiesUnit">份</span>
+          <input type="number" id="seed" min="1" max="99999999" value="20261111" data-tt="seedTT">
+          <label data-tt="ansTT"><input type="checkbox" id="withAns" checked> <span data-t="ansLbl">附答案页</span></label>
+          <span class="hint" style="font-size:12px" data-t="cellSizeLbl">数表大小</span>
+          <span class="seg mini" id="segCell">
+            <button id="cellMinus" data-tt="cellMinusTT">－</button>
+            <button id="cellAuto" data-tt="cellAutoTT">自动</button>
+            <button id="cellPlus" data-tt="cellPlusTT">＋</button>
+          </span>
+        </div>
+        <div class="tip" data-t="seedTip">种子＝出题编号：同一个种子出同一套题，改它就换题；答案页印着种子可复现。</div>
+        <div class="btns">
+          <span class="seg mini" id="segPer" data-tt="perTT">
+            <button data-v="1" data-t="per1">一页一卷</button><button data-v="2" data-t="per2">一页两卷·裁开</button></span>
+          <label data-tt="hdrTT"><input type="checkbox" id="withHdr" checked> <span data-t="hdrLbl">页眉</span></label>
+          <label data-tt="stampTT"><input type="checkbox" id="withStamp" checked> <span data-t="stampLbl">集章表</span></label>
+          <label data-tt="footTT"><input type="checkbox" id="withFoot" checked> <span data-t="footLbl">页脚</span></label>
+          <label data-tt="ruleTT"><input type="checkbox" id="withRule" checked> <span data-t="ruleLbl">说明</span></label>
+        </div>
+      </fieldset>
+        <div class="act">
+          <button class="btn sec" id="reroll" data-t="rerollLbl" data-tt="rerollTT">换一批</button>
+          <button class="btn pri" id="print" data-t="printLbl">打印 / 存 PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="stage" id="stage"></div>
+<div id="diag"></div>
+
+<script>
+/* ===== KERNEL START ===== */
+var MAXV = 10;   // 10 以内：两格之和超过 10 的不作为合法目标
+var DG   = 9;    // 单格最大数字
+var TRUNC = 18;  // 答案页每目标最多列出多少对
+var KINDS={sum:'和',diff:'差',mul:'积'};
+var CN=['','一','二','三','四','五','六','七','八','九'];
+/* 内核自带的报错文案（校验不过、排不出、审计异常）也要跟着语言走，但内核是被
+   scripts/verify.mjs 用 node:vm 直接加载的那一份，里面按中文正则断言（/植桩|覆盖|条数/ …）。
+   所以 KLANG 默认 'zh'：只有页面 switchLang() 会改成 'en'，校验脚本永远看到中文，
+   两边不会互相拖累。 */
+var KLANG='zh';
+function setKLang(l){KLANG=(l==='en')?'en':'zh';}
+function KM(zh,en){return KLANG==='en'?en:zh;}
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+function randInt(rng,n){return Math.floor(rng()*n);}
+function shuffle(a,rng){for(var i=a.length-1;i>0;i--){var j=randInt(rng,i+1),t=a[i];a[i]=a[j];a[j]=t;}return a;}
+
+/* 上下左右相邻边（不含斜角）。每条边记 left=起点（网格二分图的偶数边一侧） */
+function allEdges(size){var e=[];for(var r=0;r<size;r++)for(var c=0;c<size;c++){var i=r*size+c;
+  if(c+1<size)e.push([i,i+1,'h']);if(r+1<size)e.push([i,i+size,'v']);}return e;}
+function parity(size,i){var r=Math.floor(i/size),c=i%size;return (r+c)&1;}
+function coord(size,i){return [Math.floor(i/size)+1,i%size+1];}
+function cname(size,i){var p=coord(size,i);return '('+p[0]+','+p[1]+')';}
+
+/* 两格算式值：和 / 差（大减小）/ 积 */
+function evalPair(kind,a,b){
+  if(kind==='sum')return a+b;
+  if(kind==='diff')return Math.abs(a-b);
+  return a*b;
+}
+/* 两个一位数相乘能得到的全部积。11、13、17、19 这类永远凑不出，必须禁选 */
+function factorPairs(t){
+  var out=[];
+  for(var x=1;x<=DG;x++)if(t%x===0&&t/x>=1&&t/x<=DG)out.push([x,t/x]);
+  return out;
+}
+var MUL_TARGETS=(function(){var s={},o=[];
+  for(var a=1;a<=DG;a++)for(var b=a;b<=DG;b++){if(!s[a*b]){s[a*b]=1;o.push(a*b);}}
+  return o.sort(function(x,y){return x-y;});})();
+function isMulTarget(t){return t>=1&&t<=DG*DG&&factorPairs(t).length>0;}
+
+/* 乘法口诀文本：小数在前；积<10 带"得"，积≥10 不带 */
+function cnNum(n){
+  if(n<=9)return CN[n];
+  if(n===10)return '一十';
+  if(n<20)return '十'+CN[n-10];
+  var t=Math.floor(n/10),o=n%10;
+  return CN[t]+'十'+(o?CN[o]:'');
+}
+function guoju(a,b){
+  var x=Math.min(a,b),y=Math.max(a,b);
+  return CN[x]+CN[y]+(x*y<10?'得':'')+cnNum(x*y);
+}
+
+/* 植桩时给一对格子填什么数字，保证结果恰为 t 且每格在合法范围内 */
+function digitsFor(kind,t,rng){
+  if(kind==='mul'){
+    var fp=factorPairs(t);
+    if(!fp.length)return null;
+    var p=fp[randInt(rng,fp.length)];
+    return rng()<.5?[p[0],p[1]]:[p[1],p[0]];
+  }
+  var lo,hi;
+  if(kind==='sum'){lo=Math.max(0,t-DG);hi=Math.min(DG,t);}else{lo=0;hi=DG-t;}
+  if(hi<lo)return null;
+  var x=randInt(rng,hi-lo+1)+lo, y=kind==='sum'?t-x:x+t;
+  if(x<0||x>DG||y<0||y>DG)return null;
+  return rng()<.5?[x,y]:[y,x];
+}
+
+/* 二分图最大匹配（匈牙利增广路）。网格相邻图按 (行+列) 奇偶天然二分，
+   所以左集只取偶数侧，结果就是精确最大值，不是启发式近似。 */
+function maxMatching(size,pairs){
+  var N=size*size,adj={},i;
+  for(i=0;i<N;i++)if(parity(size,i)===0)adj[i]=[];
+  for(i=0;i<pairs.length;i++){var a=pairs[i][0],b=pairs[i][1];
+    if(parity(size,a)===0)adj[a].push(b);else adj[b].push(a);}
+  var matchR={};
+  function tryK(u,seen){var list=adj[u];
+    for(var k=0;k<list.length;k++){var v=list[k];if(seen[v])continue;seen[v]=1;
+      var mu=matchR[v];
+      if(mu===undefined||tryK(mu,seen)){matchR[v]=u;return true;}}
+    return false;}
+  var m=0;
+  var keys=Object.keys(adj).sort(function(x,y){return x-y;});
+  for(i=0;i<keys.length;i++){if(tryK(+keys[i],{}))m++;}
+  return m;
+}
+
+/* 先植桩（互不重叠的目标对 → 保证有解），再随机补满其余格 */
+function plant(size,jobs,rng){
+  var N=size*size,i;
+  for(var att=0;att<800;att++){
+    var grid=new Array(N),used=new Array(N);
+    for(i=0;i<N;i++){grid[i]=-1;used[i]=false;}
+    var E=shuffle(allEdges(size).slice(),rng),ep=0,plan=[],ok=true;
+    for(var j=0;j<jobs.length&&ok;j++){
+      var jb=jobs[j],placed=0;
+      while(placed<jb.quota&&ep<E.length){
+        var e=E[ep++];
+        if(used[e[0]]||used[e[1]])continue;
+        var d=digitsFor(jb.kind,jb.t,rng);
+        if(!d)continue;
+        grid[e[0]]=d[0];grid[e[1]]=d[1];used[e[0]]=used[e[1]]=true;
+        plan.push({a:e[0],b:e[1],kind:jb.kind,t:jb.t,job:j,seq:placed});
+        placed++;
+      }
+      if(placed<jb.quota)ok=false;
+    }
+    if(ok)return {grid:grid,plan:plan};
+  }
+  return null;
+}
+
+/* 在成品盘面上穷举某目标的全部合法相邻对 */
+function edgesOf(grid,size,kind,t){
+  var E=allEdges(size),out=[];
+  for(var k=0;k<E.length;k++){
+    var a=grid[E[k][0]],b=grid[E[k][1]],v=evalPair(kind,a,b);
+    if(kind==='sum'&&v>MAXV)continue;
+    if(v===t)out.push({a:E[k][0],b:E[k][1],dir:E[k][2]});
+  }
+  return out;
+}
+function eqOf(kind,x,y,t){
+  if(kind==='sum')return x+' + '+y+' = '+t;
+  if(kind==='diff')return Math.max(x,y)+' - '+Math.min(x,y)+' = '+t;
+  return x+' × '+y+' = '+t;
+}
+/* 目标数合法性按运算分别判：和≤10、差≤9、积必须是两个一位数之积 */
+function checkJob(jb){
+  if(jb.kind==='sum'){if(jb.t<0||jb.t>MAXV)return KM('和的目标数必须在 0–10 之间（当前 '+jb.t+'）','The sum target must be between 0 and 10 (currently '+jb.t+')');return '';}
+  if(jb.kind==='diff'){if(jb.t<0||jb.t>DG)return KM('差的目标数必须在 0–9 之间（当前 '+jb.t+'）','The difference target must be between 0 and 9 (currently '+jb.t+')');return '';}
+  if(jb.kind==='mul'){
+    if(!isMulTarget(jb.t))return KM('积 '+jb.t+' 凑不出来：没有两个一位数相乘等于它（11、13、17、19 这类质数就不行）',
+                                    'Product '+jb.t+' cannot be made: no two single digits multiply to it (primes like 11, 13, 17, 19 never work)');
+    return '';
+  }
+  return KM('未知运算 ','Unknown operation ')+jb.kind;
+}
+/* 只要本轮有乘法目标，补位数字就不放 0：0 乘任何数都是 0，会留下一堆死格 */
+function fillerPool(jobs){
+  for(var i=0;i<jobs.length;i++)if(jobs[i].kind==='mul')return {lo:1,n:DG};
+  return {lo:0,n:DG+1};
+}
+
+function buildBoard(opts){
+  var size=opts.size,jobs=opts.jobs,rng=mulberry32(opts.seed>>>0),i;
+  var total=0;for(i=0;i<jobs.length;i++)total+=jobs[i].quota;
+  if(!jobs.length)throw new Error(KM('至少选一个目标数','Choose at least one target'));
+  for(i=0;i<jobs.length;i++){
+    var err=checkJob(jobs[i]);
+    if(err)throw new Error(err);
+  }
+  if(Math.floor(size*size/2)<total)
+    throw new Error(KM('配额超出盘面容量：'+size+'×'+size+' 最多 '+Math.floor(size*size/2)+' 对，当前要 '+total+' 对',
+                       'Too many pairs for this grid: '+size+'×'+size+' holds at most '+Math.floor(size*size/2)+' pairs, you asked for '+total));
+  var p=plant(size,jobs,rng);
+  if(!p)throw new Error(KM('排不出互不重叠的目标对：请减少目标数、降低每目标对数，或改用 10×10',
+                           'No non-overlapping pairs can be placed: use fewer targets, fewer pairs per target, or switch to 10×10'));
+  var grid=p.grid,fp=fillerPool(jobs);
+  for(i=0;i<grid.length;i++)if(grid[i]<0)grid[i]=fp.lo+randInt(rng,fp.n);
+
+  var key=[],all=[];
+  for(i=0;i<jobs.length;i++){
+    var jb=jobs[i],es=edgesOf(grid,size,jb.kind,jb.t),pset={},cnt=0;
+    for(var q=0;q<p.plan.length;q++)if(p.plan[q].job===i){
+      pset[p.plan[q].a+'_'+p.plan[q].b]=1;pset[p.plan[q].b+'_'+p.plan[q].a]=1;cnt++;
+    }
+    for(var e2=0;e2<es.length;e2++){
+      var x=grid[es[e2].a],y=grid[es[e2].b];
+      es[e2].eq=eqOf(jb.kind,x,y,jb.t);
+      es[e2].star=!!pset[es[e2].a+'_'+es[e2].b];
+      if(es[e2].star)es[e2].job=i;
+      if(es[e2].star)all.push(es[e2]);
+    }
+    key.push({kind:jb.kind,t:jb.t,quota:jb.quota,list:es,
+              soloMax:maxMatching(size,es.map(function(z){return [z.a,z.b];})),planted:cnt});
+  }
+  var union={},up=[];
+  for(i=0;i<key.length;i++)for(var c2=0;c2<key[i].list.length;c2++){
+    var it=key[i].list[c2],kk=it.a+'_'+it.b;
+    if(!union[kk]){union[kk]=1;up.push([it.a,it.b]);}
+  }
+  return {size:size,grid:grid,jobs:jobs,plan:p.plan,key:key,legalEdges:up.length,
+          fullMax:maxMatching(size,up),totalQuota:total,seed:opts.seed};
+}
+
+/* 自检：盘面必须真能兑现答案页（页面与校验脚本共用同一函数） */
+function audit(bd){
+  var bad=[],size=bd.size,g=bd.grid,i,j;
+  for(i=0;i<g.length;i++)if(!(g[i]>=0&&g[i]<=DG))bad.push(KM('单格越界 '+i+'='+g[i],'Cell out of range '+i+'='+g[i]));
+  var used={};
+  for(i=0;i<bd.plan.length;i++){
+    var q=bd.plan[i];
+    if(used[q.a]||used[q.b])bad.push(KM('植桩格被重复占用 '+q.a+'/'+q.b,'A planted cell is reused '+q.a+'/'+q.b));
+    used[q.a]=used[q.b]=1;
+    var v=evalPair(q.kind,g[q.a],g[q.b]);
+    if(v!==q.t)bad.push(KM('植桩对不达目标 '+cname(size,q.a)+cname(size,q.b)+' → '+v+'≠'+q.t,
+                           'Planted pair misses the target '+cname(size,q.a)+cname(size,q.b)+' → '+v+'≠'+q.t));
+    if(q.kind==='sum'&&v>MAXV)bad.push(KM('植桩和越出 10 以内：'+v,'Planted sum is over 10: '+v));
+    if(q.kind==='mul'&&(g[q.a]<1||g[q.b]<1))bad.push(KM('植桩积用了 0：'+g[q.a]+'×'+g[q.b],'A planted product uses 0: '+g[q.a]+'×'+g[q.b]));
+    if(parity(size,q.a)===parity(size,q.b))bad.push(KM('植桩不是相邻格（二分性被破坏）','Planted pair is not made of touching cells'));
+  }
+  /* 本轮含乘法时，补位数字必须落在 1–9（0 会让乘法对变成死格） */
+  var hasMul=false;
+  for(i=0;i<bd.key.length;i++)if(bd.key[i].kind==='mul')hasMul=true;
+  if(hasMul)for(i=0;i<g.length;i++)if(!used[i]&&g[i]<1)bad.push(KM('补位出现 0（乘法轮不该有死格）于格 '+i,'Filler left a 0 (a multiplication round must have no dead cells) at cell '+i));
+  for(i=0;i<bd.key.length;i++){
+    var k=bd.key[i],re=edgesOf(g,size,k.kind,k.t),st=0;
+    if(re.length!==k.list.length)bad.push(KM('答案条数与穷举不符 目标'+k.t+'：'+k.list.length+'≠'+re.length,
+                           'Answer count disagrees with the full scan, target '+k.t+': '+k.list.length+'≠'+re.length));
+    for(j=0;j<k.list.length;j++){
+      var e=k.list[j];
+      var v2=evalPair(k.kind,g[e.a],g[e.b]);
+      if(v2!==k.t)bad.push(KM('答案项非法 目标'+k.t+' '+cname(size,e.a)+cname(size,e.b)+'='+v2,
+                           'Illegal answer for target '+k.t+' '+cname(size,e.a)+cname(size,e.b)+'='+v2));
+      if(parity(size,e.a)===parity(size,e.b))bad.push(KM('答案项不相邻','An answer is not a touching pair'));
+      if(k.kind==='sum'&&v2>MAXV)bad.push(KM('答案项和越界：'+v2,'An answer sums over the limit: '+v2));
+      if(k.kind==='mul'&&(g[e.a]<1||g[e.b]<1))bad.push(KM('答案项积用了 0','An answer product uses 0'));
+      if(e.star)st++;
+    }
+    if(st<k.quota)bad.push(KM('植桩覆盖不足 目标'+k.t+'：'+st+'/'+k.quota,'Too few planted pairs for target '+k.t+': '+st+'/'+k.quota));
+    if(k.planted!==k.quota)bad.push(KM('植桩计数异常 目标'+k.t,'Planted count is wrong for target '+k.t));
+    if(k.soloMax<k.quota)bad.push(KM('单目标最大匹配低于配额 '+k.t+'：'+k.soloMax,'Solo maximum for target '+k.t+' is below the quota: '+k.soloMax));
+  }
+  if(bd.fullMax<bd.totalQuota)bad.push(KM('fullMax 低于配额总数：'+bd.fullMax+'<'+bd.totalQuota,
+                        'fullMax is below the total quota: '+bd.fullMax+'<'+bd.totalQuota));
+  return bad;
+}
+
+/* 难度包：目标数清单 + 每个目标要几对（放在内核里，页面与校验脚本共用同一份口径） */
+var PRESETS={
+  /* 10 以内加减 */
+  easy:{sum:[8,9,10],diff:[],mul:[],quota:2},
+  std :{sum:[6,7,8], diff:[2,3],mul:[],quota:3},
+  mid :{sum:[3,4,5,7],diff:[1,4],mul:[],quota:3},
+  hard:{sum:[2,3,4,5,6,7,8,9,10],diff:[1,2,3],mul:[],quota:1},
+  /* 表内乘法（口诀） */
+  m1:{sum:[],diff:[],mul:[2,3,4,5,6],quota:3},
+  m2:{sum:[],diff:[],mul:[6,8,12,18,24],quota:2},
+  m3:{sum:[],diff:[],mul:[14,21,28,42,56,63],quota:2},
+  /* 加减乘混排：孩子要先判断用哪种运算 */
+  mix:{sum:[6,8,10],diff:[2,4],mul:[12,18,24],quota:2}
+};
+/* ===== KERNEL END ===== */
+
+/* ================= 版式 ================= */
+var HEX=['#d64541','#e8842a','#c99700','#3f9d4e','#2f6fb3','#7a4fa3','#d76fa6','#2f9c9c'];
+/* BUILD 打在状态条上：浏览器里挂着改动之前打开的旧标签页时，一眼能看出来
+   （2026-11-12 那次"复选页脚数表变小"就是这样——文件已经修好，标签页还是旧的）。
+   改了版式/量测逻辑就顺手把这里的日期后缀进一位。 */
+var BUILD='2026-11-16';
+var S={size:10,mode:'quest',sum:[6,7,8],diff:[2,3],mul:[],quota:3,copies:1,seed:20261111,
+  withAns:true,rule:true,hdr:true,stamp:true,foot:true,per:1,cellAdj:0,lang:'zh'};
+
+/* ================= 语言（中文 / English） ================= */
+/* 一份字典 + 三个取值口：
+     T(k)      纯文案；F(k,{占位})  带插值的文案；KN(kind)   运算名（和/差/积 → Sum/Diff/Prod）。
+   字典写成 [中, 英] 成对的两列，改一条不会漏另一条；缺失的键自动回落到中文。
+   静态标签挂 data-t（替换文本）/ data-h（含标签的 HTML）/ data-tt（title 提示），
+   applyLang() 统一刷；纸面文字全在生成函数里现拼，所以切换后整页重画、格子重新解。
+   英文比中文长约 1.5 倍 → 说明块变高 → cellCeil/fitSheets 会量出来并自己收缩格子，
+   不需要为英文另配一套字号；两套语言跑的是同一个版面求解器。 */
+var L10N_RAW={
+  /* ---------- 文档 / 工具栏 ---------- */
+  docTitle:['数格涂涂 · 一年级 10 以内加减法涂色游戏生成器',
+            'Number Grid Paint · printable colouring grids for addition, subtraction & times tables'],
+  appTitle:['数格涂涂','Number Grid Paint'],
+  appSub:['相邻两格凑数涂色 · 10 以内加减法 &amp; 表内乘法口诀',
+          'Colour touching number pairs · addition &amp; subtraction within 10, plus times tables'],
+  langTT:['界面和纸面文字一起切换。切成英文后，说明块会变高，格子尺寸由版面重新解出来，不用手工调。',
+          'Switches the interface and the printed page together. In English the rules block gets taller, so the cell size is re-solved by the layout — nothing to adjust by hand.'],
+  gBoard:['盘面','Grid'],gPlay:['玩法','Mode'],gPack:['难度包','Level pack'],
+  gQuota:['每目标要涂','Pairs per target'],gOut:['份数 · 种子 · 版面','Copies · Seed · Layout'],
+  modeQuest:['闯关集章','Stamp Hunt'],modeDuel:['双人抢格','2-Player Battle'],
+  pEasy:['入门 · 只凑大数','Warm-up · big sums only'],pStd:['标准（推荐）','Standard (recommended)'],
+  pMid:['进阶 · 小数难找','Tricky · small targets'],pHard:['挑战 · 集齐 1–10','Challenge · all of 1–10'],
+  pM1:['乘法 · 表内基础','Times tables · basics'],pM2:['乘法 · 常用口诀','Times tables · common facts'],
+  pM3:['乘法 · 难口诀','Times tables · hard facts'],pMix:['加减混合乘法','Add, subtract, multiply'],
+  q1:['1 对','1 pair'],q2:['2 对','2 pairs'],q3:['3 对','3 pairs'],q4:['4 对','4 pairs'],
+  legSum:['目标数 · 两格之和 = t','Target · cell + cell = t'],
+  legDiff:['目标数 · 两格之差 = t','Target · cell − cell = t'],
+  legMul:['目标数 · 两格之积 = t（表内乘法，可单用或混练）',
+          'Target · cell × cell = t (times tables — on its own or mixed)'],
+  mulTip:['只列两个一位数相乘的积；11、13、17、19 凑不出；勾乘法后盘内不放 0。',
+          'Only products of two single digits; 11, 13, 17 and 19 cannot be made; grids with × never contain 0.'],
+  copiesUnit:['份','copies'],seedLbl:['种子','seed'],
+  seedTT:['种子＝出题编号。同一个种子出同一套题，改种子就换题；要找回以前那套，把答案页（或上方状态条）上印着的种子填回来。「换一批」是随机抽一个新种子，抽完记下它才找得回。',
+          'The seed is the set number: the same seed always gives the same questions. To get an old set back, type the seed printed on the answer page (or in the status line) — "New set" picks a random one, so write it down if you want it back.'],
+  ansLbl:['附答案页','Answer page'],
+  ansTT:['每卷另起一页，老师用；不勾则只出学生页','One extra page per set, for the teacher; untick for student pages only'],
+  cellSizeLbl:['数表大小','Grid size'],
+  cellMinusTT:['每格缩 1mm：腾出来的高度还给说明和集章表，说明会自动回到单栏大字',
+               '−1 mm per cell: the height goes back to the rules and the stamp card, and the rules drop to one wide column'],
+  cellAutoTT:['自动：格子由版面解出来，能多大就多大','Auto: the cell size is solved from the page — as large as fits'],
+  cellPlusTT:['每格放大 1mm：说明换两栏、集章表多分一栏、页眉压成一行来腾地方；纸装不下就加不上去了',
+              '+1 mm per cell: the rules go two-column, the stamp card gains a column and the header goes slim; it stops when the paper is full'],
+  cellAutoBtn:['自动','Auto'],
+  cellManualTT:['手动 {v}mm（这套版面的自动值是 {a}mm）：点一下恢复自动',
+                'Manual {v} mm (auto for this layout is {a} mm): click to go back to Auto'],
+  seedTip:['种子＝出题编号：同一个种子出同一套题，改它就换题；答案页印着种子可复现。',
+          'The seed is the set number — same seed, same questions. It is printed on the answer page so a set can be re-made.'],
+  perTT:['一页两卷：半页一盘，中间印裁开线，老师沿虚线裁开。份数会自动凑成偶数',
+         'Two per page: half a page per grid with a cut line between them; the copy count rounds up to an even number'],
+  per1:['一页一卷','1 per page'],per2:['一页两卷·裁开','2 per page · cut'],
+  hdrLbl:['页眉','Header'],hdrTT:['页眉那一块：标题 + 第几卷 + 姓名/日期/用时。关掉省 12–16mm',
+        'The top block: title + set number + name/date/time. Off saves 12–16 mm'],
+  stampLbl:['集章表','Stamp card'],stampTT:['集章表/记分表：写算式的地方。关掉省 30–50mm，学生只涂色不写式',
+        'Where the equations are written. Off saves 30–50 mm — colouring only, no writing'],
+  footLbl:['页脚','Footer'],footTT:['页脚那一行：满分对数、本盘最多可涂、签字。关掉省 8mm',
+        'The bottom line: pairs to win, grid maximum, signature. Off saves 8 mm'],
+  ruleLbl:['说明','Rules'],ruleTT:['勾掉后学生页省出 33–38mm，盘面格子自动放大一档（斜着不算的提醒会并进标题那一行）；一页两卷时装不下，会自动关闭',
+        'Off frees 33–38 mm and the cells grow a step ("no diagonals" moves into the title line). Not available in 2-up, so it turns itself off'],
+  rerollLbl:['换一批','New set'],
+  rerollTT:['随机抽一个新种子重新出题（抽完记下答案页上的种子才找得回）',
+            'Pick a random new seed and re-make the questions (note the seed on the answer page to get them back)'],
+  printLbl:['打印 / 存 PDF','Print / Save PDF'],
+  /* ---------- 状态条 ---------- */
+  stOut:['已出 <b>{n}</b> 卷（盘面各不相同）· ','Made <b>{n}</b> set{z} (each grid different) · '],
+  stHalf:['每页 2 卷 → <b>{p}</b> 张 A4，裁开 {n} 份','2 sets per page → <b>{p}</b> A4 sheet{z}, cut into {n}'],
+  stOne:['每页 1 卷 → <b>{p}</b> 张 A4','1 set per page → <b>{p}</b> A4 sheet{z}'],
+  stCounts:[' · 目标 {t} 个 · 满分 <b>{f}</b> 对 · 起始种子 {s}',
+            ' · {t} target{z1} · <b>{f}</b> pair{z2} to win · seed {s}'],
+  stDual:[' · <b>双盘：页眉压成一行，玩法说明不印</b>',' · <b>2-up: slim header, rules not printed</b>'],
+  stNoRule:[' · 未印说明',' · rules off'],stNoHdr:[' · 未印页眉',' · header off'],
+  stNoStamp:[' · 未印集章表',' · stamp card off'],stNoFoot:[' · 未印页脚',' · footer off'],
+  stFail:['生成失败：{e}<br>8×8 盘面最多 {a} 对，10×10 最多 {b} 对。目标数越多、每个目标要的对数越多，越吃格子。',
+          'Cannot make this: {e}<br>An 8×8 grid holds at most {a} pairs, a 10×10 at most {b}. More targets, or more pairs per target, need more cells.'],
+  stBuild:['代码版本 {b}','Build {b}'],
+  stBuildTT:['当前页面加载的代码版本。若比最近一次改动日期旧，说明这个标签页还是旧的：按 Cmd+R 重新加载再打印',
+             'The code version this page loaded. If it is older than the last edit, the tab is stale — reload (Cmd/Ctrl+R) before printing'],
+  wFloor:[' · 版面已经挤到下限，手动调节暂时不动：先关掉集章表或玩法说明，或减少目标数',
+          ' · The page is already at its floor, so the manual step does nothing yet: turn off the stamp card or the rules, or use fewer targets'],
+  wClamp:[' · {c}了：这就是这张纸能装的极限',' · {c} — that is as far as this page goes'],
+  clampHi:['加不动','grown no further'],clampLo:['已到底','shrunk to the floor'],
+  wTight:[' · 版面很紧：还得再挤一格集章表才放得下，算式格偏窄',
+          ' · Tight page: the stamp card needed an extra column to fit, so the equation boxes are narrow'],
+  wSmall:[' · <b>每格只有 {c}mm，偏小：{h}</b>',' · <b>Cells are only {c} mm — {h}</b>'],
+  wSm2a:['关掉集章表能明显放大','turning off the stamp card frees a lot'],
+  wSm2b:['减少目标数或每目标对数','use fewer targets, or fewer pairs per target'],
+  wSm1:['减少目标数、每目标对数，或关掉玩法说明','use fewer targets, fewer pairs per target, or turn the rules off'],
+  wOver:[' · <b>版面仍挤 {m}mm（差在 {e}）：{h}</b>',
+          ' · <b>Still {m} mm over ({e}): {h}</b>'],
+  wOver2:['双盘放不下，请关掉集章表/页脚，或改回一页一卷','the 2-up page will not fit — drop the stamp card/footer, or go back to 1 per page'],
+  wOver1:['请减少目标数或每目标对数','use fewer targets, or fewer pairs per target'],
+  wNoise:[' · 这台浏览器的版面量测有 {m}mm 取整噪声（{e}），格子已按最大出，不影响打印',
+          ' · This browser measures the page with {m} mm of rounding noise ({e}); cells are already at the largest that fits, printing is unaffected'],
+  notLocated:['未定位','not located'],
+  dirB:['下','bottom'],dirR:['右','right'],dirL:['左','left'],dirT:['上','top'],
+  elOver:['{t} 顶出{d}边','{t} past the {d} edge'],elGap:['{a}↔{b} 间隙不足{n}mm','{a}↔{b} gap under {n} mm'],
+  /* ---------- 纸面：页眉 ---------- */
+  brand:['数格<em>涂涂</em>','Grid <em>Paint</em>'],
+  setWord:['第 {no} 卷','Set {no}'],
+  hdrSub:['相邻两格凑数涂色 · 本轮练：{ks} · {s}×{s} · {md} · {set}{cue}',
+          'Colour touching number pairs · this set: {ks} · {s}×{s} · {md} · {set}{cue}'],
+  hdrSubSlim:['{ks} · {s}×{s} · {md}{cue}','{ks} · {s}×{s} · {md}{cue}'],
+  cueNoDiag:[' · <b>斜着不算</b>',' · <b>no diagonals</b>'],
+  metaTop:['姓名 <u></u> 日期 <u></u> 用时 <u></u>','Name <u></u> Date <u></u> Time <u></u>'],
+  metaFull:['姓名 <u></u><br>日期 <u></u> 用时 <u></u>','Name <u></u><br>Date <u></u> Time <u></u>'],
+  modeQuestShort:['闯关集章','Stamp Hunt'],modeDuelShort:['双人抢格','Cell Battle'],
+  /* ---------- 纸面：说明块 ---------- */
+  tagHow:['怎么玩','How to play'],tagRules:['三条约定','Three rules'],
+  opSum:['和','sum'],opDiff:['差','difference'],opProd:['积','product'],
+  opOne:['{a}','{a}'],opTwo:['{a}（或{b}）','{a} (or {b})'],opThree:['{a}、{b}或{c}','{a}, {b} or {c}'],
+  howBody:['<b>上、下、左、右相邻两格</b>的{op}，如果<span style="white-space:nowrap">等于目标数</span>，就用对应的颜色涂满或圈出。',
+           'When <b>two cells that touch up, down, left or right</b> have a {op} that <span style="white-space:nowrap">equals the target</span>, colour both cells in or circle them in that target colour.'],
+  okDiag:['斜着 ✗','Diagonal ✗'],
+  rule1:['① <b>一格只能涂一次</b>，涂过的格不能重复使用。',
+         '① <b>Each cell is used once</b> — a coloured cell cannot be part of another pair.'],
+  rule2:['② <b>一个目标数用同一种颜色</b>，两格都涂满或圈出，并在集章表写出算式。',
+         '② <b>One target, one colour.</b> Colour or circle both cells, then write the equation on the stamp card.'],
+  rule3Sum:['相加<b>超过 10</b> 的不算','Sums over <b>10</b> do not count'],
+  rule3Mul0:['相乘只背 1–9 的口诀，带 0 的那一格凑不出积（凑和、凑差还能用）',
+             'Multiply with facts up to 9 × 9 — a cell with 0 can never make a product (it still works for + and −)'],
+  rule3Mul1:['相乘只背 1–9 的口诀，所以这一盘里一个 0 也没有，每格都能进口诀',
+             'Multiply with facts up to 9 × 9, so this grid has no 0 at all — every cell belongs in a fact'],
+  rule3Else:['得数都在 <b>10 以内</b>','Every answer is <b>within 10</b>'],
+  rule3Sep:['；','; '],rule3Wrap:['③ {l}。','③ {l}.'],
+  /* ---------- 纸面：集章表 ---------- */
+  tcTitle:['集章表','Stamp card'],tcTitleSet:['集章表（{set}）','Stamp card ({set})'],
+  tcTarget:['目标数','Target'],tcNeed:['要几对','Pairs'],tcNeedS:['几对','Pairs'],
+  tcMine:['我找到的算式','Equations I found'],
+  /* 三/四栏时算式列只剩 ~14mm，8pt 下 "Equations" 一个词就顶出去了（拉丁词不会像中文那样
+     逐字折行）。中文两种宽度都写「我找到的算式」，英文窄列改 "Show work"——教室里就在说这件事。 */
+  tcMineS:['我找到的算式','Show work'],
+  tcEq:['算式','Equations'],tcEqS:['算式','Work'],
+  tcPairsCell:['{n} 对','{n}'],
+  tcMergeNote:[' · 目标较多，几个对写在同一格算式栏里',
+               ' · many targets: the pairs share one equation box'],
+  /* ---------- 纸面：双人 ---------- */
+  dtTitle:['抢格对战 · 两人各一色，轮流占格','Cell Battle · two players, one colour each, take turns'],
+  dtTitleSet:['抢格对战 · 两人各一色（{set}）','Cell Battle · one colour each ({set})'],
+  dtLegal:['本轮合法目标：','Legal targets this round: '],
+  dt1:['① 两人轮流各找一对<b>还没被涂过</b>的相邻格，算对目标数就涂上自己的颜色。',
+       '① Players take turns finding a pair of <b>unused</b> touching cells; if it makes the target, colour it your colour.'],
+  dt2:['② 谁先找不到合法对，谁就停手。','② Whoever cannot find a legal pair first has to stop.'],
+  dt3:['③ 比谁涂的对数多；也可以规定"最后还能涂的人赢"。',
+       '③ Most pairs wins — or agree that the last player who can still move wins.'],
+  dtTip:['<b>兵法：</b>这盘里数字 <b>{d}</b> 出现最多（{c} 个），先占住它挨着的地方，把对手能用的对堵住{m}。',
+         '<b>Strategy:</b> the digit <b>{d}</b> appears most often here ({c} times) — take the cells next to it first and block your partner\'s pairs{m}.'],
+  dtTipMul:['；积的对还要背得出口诀，慢一步就被抢走',
+            '; product pairs need the fact memorised, or someone else takes them'],
+  dtWho:['谁','Who'],dtPairs:['对数','Pairs'],dtWrite:['算式记这里','Write equations here'],
+  dtScore:['甲','A'],dtScore2:['乙','B'],
+  dtMiniScore:['{a} &nbsp;&nbsp; {b}（谁先找不到合法对谁停手，比谁涂得多）',
+               '{a} &nbsp;&nbsp; {b} — whoever cannot find a legal pair stops; most pairs wins'],
+  dtMiniOne:['{n} <span class="dot" style="background:{c}"></span>{u} 对',
+             '{n} <span class="dot" style="background:{c}"></span>{u} pairs'],
+  /* ---------- 纸面：页脚 / 裁开线 ---------- */
+  ftQuest:['满分 <b>{q}</b> 对 · 目标数 <b>{k}</b> 个 · 本盘最多能涂 <b>{m}</b> 对',
+           'Full marks <b>{q}</b> pair{z1} · <b>{k}</b> target{z2} · at most <b>{m}</b> pair{z3} fit here'],
+  ftDuel:['本盘最多可涂 <b>{m}</b> 对（数学上算出的精确上限）· 双方对数之和不会超过它',
+          'At most <b>{m}</b> pair{z} fit on this grid (exact maximum) · the two scores together cannot pass it'],
+  ftMine:['我一共涂了 <b>{u}</b> 对 · 签字 {s}','I coloured <b>{u}</b> pairs · Signature {s}'],
+  ftMineSlim:['我涂了 <b>{u}</b> 对','I coloured <b>{u}</b> pairs'],
+  cutline:['✂ 沿虚线裁开 · 上下各一卷','✂ Cut along the line · one set above, one below'],
+  /* ---------- 纸面：答案页 ---------- */
+  anTitle:['答案与讲解 · {set}','Answers &amp; working · {set}'],
+  anSub:['老师用 · 盘面数字与合法对清单同源生成，不另行计算',
+         'Teacher copy · grid and pair list come from one seed'],
+  anMeta:['{s}×{s} · 目标 {k} 个 · 种子 {seed}','{s}×{s} · {k} target{z} · seed {seed}'],
+  anLegend:['<b>参考解</b>（一种一定能涂成的涂法，盘面里上了淡色的格就是被用到的格）：<br>',
+            '<b>One working solution</b> (a way that always fills the card; pale cells in the grid are the ones it uses):<br>'],
+  anNeed:['要 {q} 对<br>','needs {q} pair{z}<br>'],
+  anSelfFail:['<b>自检未过：</b>','<b>Self-check failed:</b> '],
+  anColTarget:['目标数','Target'],
+  anColRef:['参考解（可同时涂成的 {q} 对）','One solution ({q} pair{z} coloured together)'],
+  anColOther:['盘面上其他合法对','Other legal pairs in the grid'],
+  anDirH:['横','H'],anDirV:['竖','V'],
+  anCells:['盘面共 {n} 对<br>单独用此数最多 {m} 对','{n} pair{z} on the grid<br>at most {m} of this one alone'],
+  anMore:['…另 {n} 对','…{n} more'],anNone:['（无）','(none)'],
+  anSeed:['种子 {s}','seed {s}']
+};
+var L10N={zh:{},en:{}};
+(function(){for(var k in L10N_RAW){L10N.zh[k]=L10N_RAW[k][0];L10N.en[k]=L10N_RAW[k][1];}})();
+function T(k){var d=L10N[S.lang];if(d&&typeof d[k]==='string')return d[k];
+  return typeof L10N.zh[k]==='string'?L10N.zh[k]:k;}
+/* F：{占位} 插值。少传一个占位就把原样留在句子里，方便发现漏了哪个 */
+function F(k,map){return T(k).replace(/\{(\w+)\}/g,function(m,x){
+  return map&&map[x]!==undefined?map[x]:m;});}
+/* 英文有单复数、中文没有：模板里写 pair{z}，这里按数字给 's' 或 ''，中文永远给 ''。
+   不这么办的话状态条会印成 "Made 1 sets"、页脚印成 "Full marks 1 pairs"。 */
+function PL(n){return S.lang==='en'&&+n===1?'':'s';}
+var KINDS_EN={sum:'Sum',diff:'Diff',mul:'Prod'};
+function KN(k){return S.lang==='en'?KINDS_EN[k]:KINDS[k];}
+/* 只换最后一个文本节点：<label><input type=checkbox> 页眉</label> 里的复选框不能被 innerHTML 冲掉 */
+function setNodeText(el,s){
+  if(el.children.length){
+    if(el.lastChild&&el.lastChild.nodeType===3)el.lastChild.nodeValue=s;
+    else el.appendChild(document.createTextNode(s));
+  }else el.textContent=s;
+}
+function applyLang(){
+  [].forEach.call(document.querySelectorAll('[data-t]'),function(e){
+    setNodeText(e,T(e.getAttribute('data-t')));});
+  [].forEach.call(document.querySelectorAll('[data-h]'),function(e){
+    e.innerHTML=T(e.getAttribute('data-h'));});
+  [].forEach.call(document.querySelectorAll('[data-tt]'),function(e){
+    e.setAttribute('title',T(e.getAttribute('data-tt')));});
+  document.documentElement.setAttribute('lang',S.lang==='en'?'en':'zh-CN');
+  document.title=T('docTitle');
+}
+function switchLang(l){
+  S.lang=(l==='en')?'en':'zh';
+  try{localStorage.setItem('gridpaint.lang',S.lang);}catch(e){}
+  setKLang(S.lang);            /* 内核报错文案跟着切；默认 zh，verify.mjs 的中文断言不受影响 */
+  applyLang();                 /* 先 applyLang 再 sync：sync 会把 cellAuto 的手动读数写回去，
+                                   顺序反了就被 data-tt 的默认文案盖掉 */
+  sync();render();
+}
+
+function mkJobs(){
+  var j=[],i;
+  for(i=0;i<S.sum.length;i++)j.push({kind:'sum',t:S.sum[i],quota:S.quota});
+  for(i=0;i<S.diff.length;i++)j.push({kind:'diff',t:S.diff[i],quota:S.quota});
+  for(i=0;i<S.mul.length;i++)j.push({kind:'mul',t:S.mul[i],quota:S.quota});
+  return j;
+}
+function lab(kind,t){return S.lang==='en'?KN(kind)+' '+t:KN(kind)+'='+t;}  /* 集章表标签：和=7 / Sum 7 */
+function labShort(kind){return KN(kind);}
+function hintEq(kind,t){return kind==='sum'?'□+□='+t:kind==='diff'?'□−□='+t:'□×□='+t;}
+function kindsIn(bd){var o={};for(var i=0;i<bd.key.length;i++)o[bd.key[i].kind]=1;
+  return ['sum','diff','mul'].filter(function(k){return o[k];});}
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+
+/* 单一表格：左上角空格 + 第一行列号 + 第一列行号，标尺与格子天然对齐 */
+function boardHTML(bd,cellmm,fs,tint){
+  var size=bd.size,g=bd.grid,i,c,h='<table class="board">';
+  h+='<tr><td class="rl" style="width:5mm;height:4mm"></td>';
+  for(c=0;c<size;c++)h+='<td class="rl" style="width:'+cellmm+'mm;height:4mm">'+(c+1)+'</td>';
+  h+='</tr>';
+  for(i=0;i<size;i++){
+    h+='<tr><td class="rl" style="width:5mm;height:'+cellmm+'mm">'+(i+1)+'</td>';
+    for(c=0;c<size;c++){
+      var k=i*size+c,t=tint&&tint[k]!==undefined?';background:'+HEX[tint[k]%HEX.length]+'33':'';
+      h+='<td style="width:'+cellmm+'mm;height:'+cellmm+'mm;font-size:'+fs+'pt'+t+'">'+g[k]+'</td>';
+    }
+    h+='</tr>';
+  }
+  return h+'</table>';
+}
+/* 2×2 小示意盘：null 画成灰点，f 标记被涂的那格 */
+function mini2(rows){var h='<table>',r,c,it;
+  for(r=0;r<2;r++){h+='<tr>';for(c=0;c<2;c++){it=rows[r][c];
+    h+=it?('<td'+(it.f?' class="f"':'')+'>'+it.v+'</td>'):'<td class="g">·</td>';}h+='</tr>';}
+  return h+'</table>';}
+function rulebar(bd){
+  var ks=kindsIn(bd),pk=bd.plan,d=null,i,s=bd.size;
+  /* 示范优先取孩子最熟的运算：和 → 积 → 差 */
+  var order=['sum','mul','diff'];
+  for(var o=0;o<order.length&&!d;o++)
+    for(i=0;i<pk.length;i++)if(pk[i].kind===order[o]){d=pk[i];break;}
+  if(!d)d=pk[0];
+  var x=bd.grid[d.a],y=bd.grid[d.b],okTxt=eqOf(d.kind,x,y,d.t);
+  /* 说明正文只说"和/差/积"这一个词，按本卷实际勾的运算拼：
+     和 → 「和」；和+差 → 「和（或差）」；和+差+积 → 「和、差或积」
+     英文走同三条模板：sum / sum (or difference) / sum, difference or product */
+  var nm=[];
+  if(ks.indexOf('sum')>=0)nm.push(T('opSum'));
+  if(ks.indexOf('diff')>=0)nm.push(T('opDiff'));
+  if(ks.indexOf('mul')>=0)nm.push(T('opProd'));
+  var opName=F(nm.length===1?'opOne':nm.length===2?'opTwo':'opThree',
+               {a:nm[0],b:nm[1],c:nm[2]});
+  var hasZero=false;
+  for(i=0;i<bd.grid.length;i++)if(bd.grid[i]===0){hasZero=true;break;}
+  var c3=[];
+  if(ks.indexOf('sum')>=0)c3.push(T('rule3Sum'));
+  if(ks.indexOf('mul')>=0)c3.push(T(hasZero?'rule3Mul0':'rule3Mul1'));
+  if(!c3.length)c3.push(T('rule3Else'));
+  var rule3=F('rule3Wrap',{l:c3.join(T('rule3Sep'))});
+  var horiz=(d.b===d.a+1);
+  var okBox=horiz?mini2([[{v:x},{v:y,f:1}],[null,null]]):mini2([[{v:x},null],[{v:y,f:1},null]]);
+  var badBox=mini2([[{v:bd.grid[0]},null],[null,{v:bd.grid[s+1]}]]);
+  return '<div class="rulebar'+(STG?' tight':'')+'">'+
+    '<div class="rseg"><span class="tag">'+T('tagHow')+'</span>'+
+    F('howBody',{op:opName})+
+    '<span class="diag">'+okBox+'<span>'+okTxt+' ✓</span></span>'+
+    '<span class="diag">'+badBox+'<span>'+T('okDiag')+'</span></span></div>'+
+    '<div class="rseg"><span class="tag">'+T('tagRules')+'</span>'+
+    T('rule1')+T('rule2')+rule3+'</div></div>';
+}
+/* 一页里放几卷 → 学生页要不要印玩法说明。半页只有 133mm 高，33–38mm 的说明块放不下。 */
+function useRule(){return S.rule&&S.per!==2;}
+/* 半页里集章表放哪儿：不看目标数有几个，看"这张表自己有多高、盘面右边那一条有多高"。
+   右边可用高度 ≈124mm（半页 132.8 − 页眉 6.9 − 盘面行号与说明的余量），
+   表高 ≈ 标题 5.3 + 表头 5.2 + 行数×5.8。14 个目标单栏 14 行 ≈92mm 塞得进去，
+   21 个就 130mm 塞不下——那时只能压在盘面下面，格子会被压到 6~7mm。
+   塞右边时盘面宽度只剩 104mm（10×10 约 9.9mm/格），仍比压在下面划算得多。 */
+var SIDE_W=76;   /* .sidewrap .task.mini{width:76mm}，别和 CSS 走偏 */
+var SIDE_H=124;
+function miniWantCols(n){return colsFor(n,n>16?4:n>12?3:n>7?2:1);}
+/* 半页表的栏数/并格：questMini 和 halfSide 都走这一个函数，免得两边算出两套栏数 */
+function miniLayout(bd,avail){
+  var W=function(c){return S.lang==='en'?[18,c>=3?9:10]:[15,c>=3?7.5:9];};
+  var r=scoreCols(avail,maxqOf(bd),eqNeed(bd,8,1.6),miniWantCols(bd.key.length),W);
+  r.w1=W(r.c)[0];r.w2=W(r.c)[1];return r;
+}
+function halfSide(bd){
+  if(!S.stamp)return false;
+  if(S.mode==='duel')return bd.key.length<=12;
+  var rows=Math.ceil(bd.key.length/miniLayout(bd,SIDE_W).c);
+  return 10.5+5.8*rows<=SIDE_H;
+}
+/* 格子尺寸：不再查固定档位表，而是先给一个"版面允许的最大上限"，再由 fitSheets()
+   二分往下收，收到刚好放得下为止。这样目标数变少、页眉/集章表/页脚/说明被勾掉时，
+   空出来的高度真的会还给盘面，而不是卡在某一档上不变。
+   上限只卡两件事：版心宽度（184mm − 5mm 行号列 = 179mm，10×10 最多 17.4mm/格、
+   8×8 最多 21.2mm/格）和半页里被集章表挤掉的那一条。字号跟着格子走（≈1.15×），
+   格子放大数字同步放大，学生才真的看得清、好下笔。 */
+function fontFor(c){return Math.max(8,Math.min(22,Math.round(c*1.15*2)/2));}
+function cellCeil(bd,half){
+  if(half){
+    if(!S.stamp)return bd.size===10?13.0:16.0;
+    return halfSide(bd)?(bd.size===10?9.8:12.3)          /* 表在右边：184−4−76=104mm 宽，宽度是瓶颈（留 0.5mm 给表格边框） */
+                       :(bd.size===10?9.0:11.0);          /* 表压在下面：高度是瓶颈 */
+  }
+  return bd.size===10?17.4:21.2;
+}
+function boardScale(bd,half){
+  var c=Math.max(5.6,Math.round((cellCeil(bd,half)-FIT)*10)/10);
+  return {c:c,f:fontFor(c)};
+}
+/* 算式提示占多宽：按字符数估。系数是 2026-11-15 用真浏览器量的——
+   把克隆表插进 .task / .task.mini 里（CSS 才和纸面一致），量每个 hintEq 的自然宽度反推：
+   半页 8pt/内边距1.6mm 最差 2.953、整页 9pt/3.2mm 2.907、tight 8.5pt/1.8mm 2.933、
+   乘法 9pt 2.806，取 2.95 盖住最差那条。
+   旧值 2.58 低了 13%：中文版面因为算式格有富余没露馅，英文标签列一宽，
+   提示格就被挤得 scrollWidth>clientWidth（scripts/size_probe.py 的"顶格"计数会报出来）。
+   注意字号由 CSS 决定：整页 table.score td 是 9pt（.eq 的 10.5pt 被它压掉），
+   半页 .task.mini 里是 8pt（连 .eq.narrow 的 9pt 也压不掉），内边距分别是 3.2 / 1.6mm。 */
+function eqNeed(bd,fs,pad){
+  var i,m=0,s;
+  for(i=0;i<bd.key.length;i++){s=hintEq(bd.key[i].kind,bd.key[i].t).length;if(s>m)m=s;}
+  return pad+2.95*m*fs/10.5;
+}
+/* 分栏时中间还有 3mm 间隙，每栏真正可用的宽度 */
+function colAvail(avail,cols){return (avail-3*(cols-1))/cols;}
+/* 集章表到底分几栏、算式格要不要并成一格——按"宽度放得下"倒推，而不是只看目标数：
+   ① 一栏里能摆下 quota 个提示格 → 照常一格一对（孩子一格写一条，最舒服）；
+   ② 摆不下就并成一格（整页 9pt／半页 8pt）：横着能写几条 × 竖着约两行 ≈ 这一格能写几个对，
+      写不满 quota 个对就少分一栏——只有 STG=2（版面实在放不下）才破这条；
+   ③ 连提示本身都放不下 → 一定少分一栏。
+   栏数只从"想要的档"往下退，所以目标多时仍会分栏，但绝不会把提示挤到隔壁列去
+   （scripts/size_probe.py 的顶格扫描就是盯这条红线的）。 */
+function scoreCols(avail,mq,need,want,W){
+  var fb=null,c,ww,a;
+  for(c=want;c>=1;c--){
+    ww=W(c);a=colAvail(avail,c)-ww[0]-ww[1];
+    if(a/mq>=need)return {c:c,m:false};
+    if(a>=need){
+      if(Math.floor(a/need)*2>=mq||STG>=2)return {c:c,m:true};
+      if(!fb)fb={c:c,m:true};
+    }
+  }
+  return fb||{c:1,m:false};
+}
+function questTask(bd){
+  var maxq=bd.key[0]?bd.key[0].quota:1,rows=[],i,q;
+  var n=bd.key.length;
+  /* 栏数决定单栏宽度（184mm 版心：1 栏 184、2 栏 90、3 栏 59、4 栏 44）。
+     列宽必须写在表头上——table-layout:fixed 只认第一行，写在数据行会被忽略。
+     英文标签列要更宽一点（"Prod 81" 比「积=81」长），多占的宽度由 scoreCols 从算式格里扣，
+     所以英文下同一套设置会少并几格／多分一栏——是版面自己退让，不是硬塞。 */
+  var en=S.lang==='en';
+  var Wq=function(c){return en?[c>=3?19:22,c>=3?10:12]:[c>=3?17:20,c>=3?7.5:11];};
+  /* 目标多于 12 个时表要加 .tight（行高、字号都压一档，见下面 cls），
+     提示格实际是 8.5pt/内边距 1.8mm，不是 9pt/3.2mm——估宽必须跟着 CSS 走。 */
+  var tg=n>12;
+  var cc=scoreCols(184,maxq,eqNeed(bd,tg?8.5:9,tg?1.8:3.2),
+                   colsFor(n,n>20?4:n>12?3:n>6?2:1),Wq);
+  var cols=cc.c,merge=cc.m,w1=Wq(cols)[0]+'mm',w2=Wq(cols)[1]+'mm';
+  for(i=0;i<n;i++){
+    var k=bd.key[i],boxes='';
+    if(merge)boxes='<td class="eq narrow" colspan="'+maxq+'">'+hintEq(k.kind,k.t)+'</td>';
+    else for(q=0;q<k.quota;q++)boxes+='<td class="eq">'+(q===0?hintEq(k.kind,k.t):'·')+'</td>';
+    rows.push('<tr><td style="width:'+w1+';white-space:nowrap"><span class="dot" style="background:'+HEX[i%HEX.length]+'"></span>'+
+      '<span class="tt">'+lab(k.kind,k.t)+'</span></td>'+
+      '<td style="width:'+w2+';font-size:8pt;white-space:nowrap">'+F('tcPairsCell',{n:k.quota})+'</td>'+boxes+'</tr>');
+  }
+  /* 表头也带 nowrap：三/四栏时列宽只有 7.5mm，"要几对" 三字会被撑到隔壁列，改写成 "几对"。 */
+  var head='<tr><th style="white-space:nowrap;width:'+w1+'">'+T('tcTarget')+'</th>'+
+    '<th style="white-space:nowrap;width:'+w2+'">'+T(cols>=3?'tcNeedS':'tcNeed')+'</th>'+
+    '<th colspan="'+maxq+'">'+T(cols>=3?'tcMineS':'tcMine')+'</th></tr>';
+  var cls='score'+(n>12?' tight':'');
+  var body;
+  if(cols>1){                       /* 目标多时分成多栏，避免顶出 A4 */
+    var per=Math.ceil(n/cols),parts=[];
+    for(i=0;i<cols;i++){
+      var sl=rows.slice(i*per,(i+1)*per);
+      if(sl.length)parts.push('<div class="task" style="flex:1"><table class="'+cls+'">'+head+sl.join('')+'</table></div>');
+    }
+    body='<div class="duelrow" style="gap:3mm">'+parts.join('')+'</div>';
+  }else body='<table class="'+cls+'">'+head+rows.join('')+'</table>';
+  /* 表下面那行收尾提示（"全涂完就过关啦…"/"卡住时先把这个数的口诀背一遍…"）整块删掉：
+     写算式这件事"三条约定"② 已经说了，剩下的属于课堂口头提醒，不必占纸面。 */
+  return '<div class="task"><h3>'+T('tcTitle')+'</h3>'+body+'</div>';
+}
+function duelTask(bd){
+  var t=[],i;
+  for(i=0;i<bd.key.length;i++)
+    t.push('<span class="dot" style="background:'+HEX[i%HEX.length]+'"></span>'+labShort(bd.key[i].kind)+' '+bd.key[i].t);
+  var cnt={},most=0,md=0,hasMul=kindsIn(bd).indexOf('mul')>=0;
+  for(i=0;i<bd.grid.length;i++){var dv=bd.grid[i];
+    if(hasMul&&dv===0)continue;                    /* 乘法轮里 0 凑不出积，别当"万能数字"推荐 */
+    cnt[dv]=(cnt[dv]||0)+1;
+    if(cnt[dv]>most||(cnt[dv]===most&&dv>md)){most=cnt[dv];md=dv;}}
+  var tip=F('dtTip',{d:md,c:most,m:hasMul?T('dtTipMul'):''});
+  return '<div class="task"><h3>'+T('dtTitle')+'</h3><div class="duelrow">'+
+    '<div class="note" style="border:0;padding:0;font-size:9.5pt;line-height:2;flex:1">'+
+    T('dtLegal')+'<b>'+t.join(' &nbsp;·&nbsp; ')+'</b><br>'+
+    T('dt1')+'<br>'+T('dt2')+'<br>'+T('dt3')+'<br>'+
+    tip+'</div>'+
+    '<table class="score" style="width:78mm"><tr><th>'+T('dtWho')+'</th><th>'+T('dtPairs')+
+    '</th><th>'+T('dtWrite')+'</th></tr>'+
+    '<tr><td style="width:14mm"><span class="dot" style="background:'+HEX[0]+'"></span>'+T('dtScore')+'</td>'+
+    '<td style="width:13mm" class="eq">＿</td><td style="height:30mm;font-size:9pt;color:#b3bec9">1)<br>2)<br>3)<br>4)<br>5)</td></tr>'+
+    '<tr><td><span class="dot" style="background:'+HEX[4]+'"></span>'+T('dtScore2')+'</td>'+
+    '<td class="eq">＿</td><td style="height:30mm;font-size:9pt;color:#b3bec9">1)<br>2)<br>3)<br>4)<br>5)</td></tr></table></div></div>';
+}
+function footTxt(bd){
+  return S.mode==='duel'
+    ? F('ftDuel',{m:bd.fullMax,z:PL(bd.fullMax)})
+    : F('ftQuest',{q:bd.totalQuota,k:bd.key.length,m:bd.fullMax,
+                   z1:PL(bd.totalQuota),z2:PL(bd.key.length),z3:PL(bd.fullMax)});
+}
+/* 页眉两种形态：整页默认大字两行（实测 18.6mm），版面紧张时压成一行（6.9mm），
+   省下的 11.7mm 直接进二分的可用高度→格子大一档；半页只有 133mm，一律用一行式。
+   信息一条没少：标题、第几卷、本轮练什么、姓名/日期/用时都在，只是字号小了。 */
+function headerHTML(bd,no,slim,cue){
+  var ks=kindsIn(bd).map(labShort).join(S.lang==='en'?', ':'、'),
+      md=T(S.mode==='duel'?'modeDuelShort':'modeQuestShort'),
+      st=F('setWord',{no:no}),br=T('brand');
+  if(slim)return '<div class="hd slim"><div><span class="ttl">'+br+' '+st+'</span>'+
+    '<span class="sub">'+F('hdrSubSlim',{ks:ks,s:bd.size,md:md,cue:cue})+'</span></div>'+
+    '<div class="meta">'+T('metaTop')+'</div></div>';
+  return '<div class="hd"><div><div class="ttl">'+br+'</div>'+
+    '<div class="sub">'+F('hdrSub',{ks:ks,s:bd.size,md:md,set:st,cue:cue})+'</div></div>'+
+    '<div class="meta">'+T('metaFull')+'</div></div>';
+}
+function sheetHTML(bd,no){
+  var sc=boardScale(bd,false), cell=sc.c, fs=sc.f;
+  var cue=useRule()?'':T('cueNoDiag');
+  /* fill＝下方有块要贴底（集章表/页脚至少勾一个）；nosink＝都没勾，盘面自己居中 */
+  return '<div class="sheet'+(S.stamp||S.foot?' fill':' nosink')+'">'+
+    (S.hdr?headerHTML(bd,no,STG>=1,cue):'')+
+    (useRule()?rulebar(bd):'')+
+    '<div class="boardzone"><div class="boardbox">'+boardHTML(bd,cell,fs,null)+
+    /* 列号行号那句删了：有页眉时"第 N 卷"页眉已经印过，整条说明就不要了，
+       省下的 4~5mm 直接还给盘面；没页眉时得留一行说清这是第几卷。 */
+    (S.hdr?'':'<div class="board-cap">'+F('setWord',{no:no})+'</div>')+'</div></div>'+
+    (S.stamp?'<div class="taskzone">'+(S.mode==='duel'?duelTask(bd):questTask(bd))+'</div>':'')+
+    (S.foot?'<div class="ft"><span>'+footTxt(bd)+'</span><span>'+
+      F('ftMine',{u:'<b>＿＿＿</b>',s:'<u style="display:inline-block;min-width:22mm;border-bottom:1px solid #c8d2dc"></u>'})+
+      '</span></div>':'')+'</div>';
+}
+/* ---- 一页两卷：半页一盘，中间一条裁开线 ---- */
+function halfHTML(bd,no){
+  var sc=boardScale(bd,true), cell=sc.c, fs=sc.f;
+  var hd=S.hdr?headerHTML(bd,no,true,T('cueNoDiag')):'';
+  var board='<div class="boardbox">'+boardHTML(bd,cell,fs,null)+
+      (S.hdr?'':'<div class="board-cap">'+F('setWord',{no:no})+'</div>')+'</div>';
+  var side=S.stamp&&halfSide(bd);
+  var task=S.stamp?(S.mode==='duel'?duelMini(bd,no):questMini(bd,no,side?76:184)):'';
+  var mid=(task&&side)?'<div class="sidewrap">'+board+task+'</div>'
+                      :'<div class="boardzone">'+board+'</div>'+task;
+  return '<div class="half'+(S.stamp||S.foot?' fill':' nosink')+'">'+hd+mid+
+    (S.foot?'<div class="ft slim"><span>'+footTxt(bd)+'</span><span>'+F('ftMineSlim',{u:'<b>＿＿</b>'})+'</span></div>':'')+
+    '</div>';
+}
+/* 裁开线每次排版现取文案（paint 会随二分反复跑，字符串常量会冻结在第一次的语言上） */
+function cutlineHTML(){return '<div class="cut"><i></i><span>'+T('cutline')+'</span><i></i></div>';}
+/* 半页版集章表：行高压到 ~5mm，目标多时自动分两栏 */
+function questMini(bd,no,avail){
+  var n=bd.key.length,i,q,mq=maxqOf(bd);
+  /* 半页里集章表压在盘面下面时，它的行高就是盘面格子的天花板：
+     14 个目标两栏要占 45mm、三栏 35mm，20 个目标必须上四栏（~34mm），
+     否则 10×10 会被压到 5.6mm 下限还装不下。栏数同样按宽度倒推（见 scoreCols），
+     挤到盘面右边的 .sidewrap 里时可用宽度只有 76mm，多半只能单栏。 */
+  var cc=miniLayout(bd,avail||184);
+  var cols=cc.c,merge=cc.m,w1=cc.w1+'mm',w2=cc.w2+'mm';
+  var rows=[];
+  for(i=0;i<n;i++){
+    var k=bd.key[i],boxes='';
+    if(merge)boxes='<td class="eq narrow" colspan="'+mq+'">'+hintEq(k.kind,k.t)+'</td>';
+    else for(q=0;q<k.quota;q++)boxes+='<td class="eq">'+(q===0?hintEq(k.kind,k.t):'·')+'</td>';
+    rows.push('<tr><td style="width:'+w1+';white-space:nowrap"><span class="dot" style="background:'+HEX[i%HEX.length]+'"></span>'+
+      '<span class="tt">'+lab(k.kind,k.t)+'</span></td><td style="width:'+w2+';white-space:nowrap">'+F('tcPairsCell',{n:k.quota})+'</td>'+boxes+'</tr>');
+  }
+  /* 列宽要写在第一行（表头）上：table-layout:fixed 只认第一行的宽度，
+     写在数据行 td 上会被忽略——单栏/两栏时没写宽度，六列平分 76mm，
+     "□×□=81" 就被切成 12.7mm 的格子（size_probe 的"顶格"就是这么抓出来的）。
+     所以不管几栏都写宽度，并且一律 nowrap：一折行行高从 5.8mm 变 9.2mm，盘面就得缩到下限。 */
+  var head='<tr><th style="white-space:nowrap;width:'+w1+'">'+T('tcTarget')+'</th>'+
+    '<th style="white-space:nowrap;width:'+w2+'">'+T('tcNeedS')+'</th>'+
+    '<th colspan="'+mq+'">'+T('tcEq')+'</th></tr>',body;
+  if(cols>1){
+    var per=Math.ceil(n/cols),parts=[];
+    for(i=0;i<cols;i++){
+      var sl=rows.slice(i*per,(i+1)*per);
+      if(sl.length)parts.push('<div class="task" style="flex:1"><table class="score">'+head+sl.join('')+'</table></div>');
+    }
+    body='<div class="duelrow" style="gap:3mm">'+parts.join('')+'</div>';
+  }else body='<table class="score">'+head+rows.join('')+'</table>';
+  return '<div class="task mini"><h3>'+F('tcTitleSet',{set:F('setWord',{no:no})})+
+    (cols>=3?'<span style="font-weight:400;font-size:8pt;color:#6b7885">'+T('tcMergeNote')+'</span>':'')+
+    '</h3>'+body+'</div>';
+}
+function maxqOf(bd){return bd.key[0]?bd.key[0].quota:1;}
+function duelMini(bd,no){
+  var t=[],i;
+  for(i=0;i<bd.key.length;i++)
+    t.push('<span class="dot" style="background:'+HEX[i%HEX.length]+'"></span>'+labShort(bd.key[i].kind)+' '+bd.key[i].t);
+  var blank=S.lang==='en'?'<u style="display:inline-block;min-width:8mm;border-bottom:1px solid #c8d2dc"></u>':'＿＿';
+  return '<div class="task mini"><h3>'+F('dtTitleSet',{set:F('setWord',{no:no})})+'</h3>'+
+    '<div class="note" style="border:0;padding:0;margin:0;font-size:8.5pt;line-height:1.8">'+T('dtLegal')+t.join(' &nbsp;·&nbsp; ')+
+    '<br>'+F('dtMiniScore',{a:F('dtMiniOne',{n:T('dtScore'),c:HEX[0],u:blank}),
+                             b:F('dtMiniOne',{n:T('dtScore2'),c:HEX[4],u:blank})})+'</div></div>';
+}
+/* 一个积对应的全部口诀（一积多式，如 12 → 二六十二 / 三四十二）。
+   英文没有"口诀"这种背诵体，改成同一批因数的横式：2 × 6 = 12 / 3 × 4 = 12。 */
+function mulForms(t){
+  var seen={},out=[];
+  factorPairs(t).forEach(function(p){var k=Math.min(p[0],p[1])+'x'+Math.max(p[0],p[1]);
+    if(!seen[k]){seen[k]=1;out.push(S.lang==='en'
+      ?eqOf('mul',Math.min(p[0],p[1]),Math.max(p[0],p[1]),t):guoju(p[0],p[1]));}});
+  return out;
+}
+function answerHTML(bd,no){
+  var cell=bd.size===10?5.6:6.6, fs=bd.size===10?8:9.5, tint={},i,j;
+  for(i=0;i<bd.plan.length;i++){tint[bd.plan[i].a]=bd.plan[i].job;tint[bd.plan[i].b]=bd.plan[i].job;}
+  var leg='<div class="legend">'+T('anLegend');
+  for(i=0;i<bd.key.length;i++)
+    leg+='<i style="background:'+HEX[i%HEX.length]+'"></i>'+lab(bd.key[i].kind,bd.key[i].t)+' &nbsp;'+
+      F('anNeed',{q:bd.key[i].quota,z:PL(bd.key[i].quota)});
+  leg+='</div>';
+  var bad=audit(bd);
+  var rows='';  for(i=0;i<bd.key.length;i++){
+    var k=bd.key[i],star=[],rest=[],shown=0;
+    for(j=0;j<k.list.length;j++){
+      var e=k.list[j];
+      var tag=F('anDir'+(e.dir==='h'?'H':'V'))+cname(bd.size,e.a)+cname(bd.size,e.b);
+      if(e.star){
+        /* 口诀是中文背诵体，英文没有对应物；横式 e.eq 已经写了 2 × 6 = 12，不再重复 */
+        var gj=(k.kind==='mul'&&S.lang==='zh')
+          ?' <span style="color:#7a4fa3;font-weight:700">'+guoju(bd.grid[e.a],bd.grid[e.b])+'</span>':'';
+        star.push(tag+'<span style="color:#26313d"> '+e.eq+'</span>'+gj);
+      }else rest.push(tag);
+    }
+    if(rest.length>TRUNC){var cut=rest.slice(0,TRUNC);
+      cut.push(F('anMore',{n:rest.length-TRUNC}));rest=cut;}
+    var forms=k.kind==='mul'?'<div style="font-weight:400;font-size:7.5pt;color:#7a4fa3">'+mulForms(k.t).join('<br>')+'</div>':'';
+    rows+='<tr><td class="n" style="width:21mm"><span class="dot" style="background:'+HEX[i%HEX.length]+'"></span>'+
+      lab(k.kind,k.t)+'<div style="font-weight:400;font-size:7.5pt;color:#98a4b0">'+
+      F('anCells',{n:k.list.length,m:k.soloMax,z:PL(k.list.length)})+'</div>'+forms+'</td>'+
+      '<td style="width:60mm" class="plist">'+star.join('<br>')+'</td>'+
+      '<td class="plist" style="color:#5b6875">'+(rest.length?rest.join(S.lang==='en'?', ':'　'):T('anNone'))+'</td></tr>';
+  }
+  /* 原来这里还有两块灰线注释（"左列灰底是参考解…坐标写法…自检" 和
+     "课堂节奏 / 调节难度 / 易错点"），2026-11-11 按用户要求整段删掉：
+     答案页只留盘面、图例和对照片段，老师扫一眼就能用。
+     自检只在真的没过时才冒出来——正常情况不占地方，出问题也不会闷着不说。 */
+  var st=F('setWord',{no:no});
+  return '<div class="sheet answers"><div class="hd"><div><div class="ttl">'+F('anTitle',{set:st})+'</div>'+
+    '<div class="sub">'+T('anSub')+'</div></div>'+
+    '<div class="meta">'+F('anMeta',{s:bd.size,k:bd.key.length,seed:bd.seed,z:PL(bd.key.length)})+'</div></div>'+
+    '<div class="ans-wrap"><div>'+boardHTML(bd,cell,fs,tint)+'</div><div style="flex:1">'+leg+
+    (bad.length?'<div class="note" style="border-left-color:#d64541">'+T('anSelfFail')+esc(bad[0])+'</div>':'')+
+    '</div></div>'+
+    '<table class="pairs"><tr><th>'+T('anColTarget')+'</th><th>'+F('anColRef',{q:bd.key[0].quota,z:PL(bd.key[0].quota)})+'</th>'+
+    '<th>'+T('anColOther')+'</th></tr>'+rows+'</table></div>';
+}
+
+/* ================= 渲染与控件 ================= */
+/* FIT：每格相对上限档的收缩量（mm）。render() 先从 FIT=0（=cellCeil 上限）画一遍，
+   放不下就二分搜索最小的 FIT，精度 0.2mm——所以格子永远是"当前版面能装下的最大尺寸"，
+   少勾一个块、少选几个目标，盘面就自动大一圈。改任何设置都从 0 重新算。 */
+var FIT=0;
+/* STG＝版面"紧张度"，0/1/2 三档，由 fitSheets() 自己挑：
+   0＝说明单栏大字 + 集章表常规栏数（默认，最好读）；
+   1＝说明换两栏 + 集章表多分一栏（把这两块自己的高度让给盘面，但仍保证并格后写得出 quota 条）；
+   2＝只有 0/1 两档收到格子上限还放不下版面时才用：多分的那栏不管写不写得住，先把版面保住。
+   三档都不动盘面宽度上限，所以格子只可能变大、不可能变小。
+   挑档走"够用就不挤"：格子离三档里最大的那个差不到 1mm 就留在低档（见 fitSheets 的 pick），
+   所以目标少、对数少、块勾得少时说明仍是单栏 9pt——只有真的挤了才换两栏。 */
+var STG=0;
+/* 手动调格子的两个记账值，只给状态条/提示用：CELL_AUTO＝这套版面的自动格子，
+   CELL_CLAMP＝''／'加不动'／'已到底'（说明 ➕➖ 已经顶到边界了）。 */
+var CELL_AUTO=0,CELL_CLAMP='';
+/* 集章表栏数：紧张时比常规多分一栏，上限 4 栏（再窄孩子就写不下字了），
+   实际用几栏还要过 scoreCols 的宽度关。 */
+function colsFor(n,base){return STG?Math.min(4,base+1):base;}
+/* 版面二分要反复重画，盘面本身却不随格子大小变——按设置做一层缓存，
+   同样的种子/目标/份数只 buildBoard 一次，二分就只花在排版上。 */
+var _bc=null;
+function boardsFor(jobs){
+  var key=[S.size,S.mode,S.quota,S.seed,S.copies,S.per,S.sum.join(','),S.diff.join(','),S.mul.join(',')].join('|');
+  if(_bc&&_bc.key===key)return _bc.bds;
+  var cnt=S.per===2?S.copies+(S.copies%2):S.copies,bds=[],n;
+  for(n=0;n<cnt;n++)bds.push(buildBoard({size:S.size,jobs:jobs,seed:S.seed+n*7919}));
+  _bc={key:key,bds:bds};
+  return bds;
+}
+function paint(){
+  var stage=document.getElementById('stage'),out='',err='';
+  try{
+    var jobs=mkJobs(),half=S.per===2,bds=boardsFor(jobs),n;   /* 双盘按偶数卷成对出，落单的那半页不浪费 */
+    if(half){
+      for(n=0;n<bds.length;n+=2)
+        out+='<div class="sheet two">'+halfHTML(bds[n],n+1)+cutlineHTML()+halfHTML(bds[n+1],n+2)+'</div>';
+    }else for(n=0;n<bds.length;n++)out+=sheetHTML(bds[n],n+1);
+    if(S.withAns)for(n=0;n<bds.length;n++)out+=answerHTML(bds[n],n+1);
+    var pages=half?Math.ceil(bds.length/2):bds.length;
+    document.getElementById('stat').innerHTML=
+      F('stOut',{n:bds.length,z:PL(bds.length)})+
+      F(half?'stHalf':'stOne',{p:pages,n:bds.length,z:PL(pages)})+
+      F('stCounts',{t:jobs.length,f:jobs.reduce(function(a,b){return a+b.quota;},0),s:S.seed,z1:PL(jobs.length),z2:PL(jobs.reduce(function(a,b){return a+b.quota;},0))})+
+      (half?T('stDual'):(useRule()?'':T('stNoRule')))+
+      (S.hdr?'':T('stNoHdr'))+(!S.stamp?T('stNoStamp'):'')+(S.foot?'':T('stNoFoot'));
+  }catch(e){
+    err=e.message;
+    out='<div class="fail">'+F('stFail',{e:esc(err),a:32,b:50})+'</div>';
+  }
+  stage.innerHTML=out;
+  if(err)document.getElementById('stat').innerHTML='<span style="color:#d64541">'+esc(err)+'</span>';
+  return err;
+}
+/* 越界多少毫米。页脚靠 margin-top:auto 贴在内容盒底边，所以"页脚底边=安全线"是正常状态，
+   不能拿它当溢出。真正的判据有两条：① 最后一块与倒数第二块之间至少留 1.5mm（页脚）/0.6mm 间隙；
+   ② 最后一块底边不得越过盒子底边（被上面的内容顶出去）。返回需要收缩的毫米数，≤0 即合格。
+   一页两卷时盒子是 .half（半页），不是 .sheet。 */
+/* 屏显预览在小窗口里会把整张纸 transform:scale(.5) 缩小（见 @media screen and (max-width:900px)），
+   于是 getBoundingClientRect() 拿到的是缩放后的像素，而 getComputedStyle 的 padding 是未缩放的。
+   两者混用会凭空多出「padding×(1−k)」的假溢出（左右各 6.5mm、上 6mm），而且这个假溢出跟格子大小无关，
+   二分再怎么收都收不掉 → 格子一路砸到 5.6mm 下限、三档全"放不下"、➕➖ 集体失效。
+   k＝实测宽/布局宽（未缩放时是 1）；把内边距按 k 折算、把每毫米像素数也按 k 折算，量测就和窗口宽度无关了。 */
+function scaleOf(box){var w=box.offsetWidth||0;if(!w)return 1;var r=box.getBoundingClientRect().width;
+  return r>0?Math.round(r/w*1000)/1000:1;}
+/* 版面判据的容差。表格线、行高、页脚外边距在不同浏览器／缩放比／字体度量下会带来
+   ±0.1mm 量级的固定残差，它跟格子大小无关——二分再怎么收都收不掉，于是三档全被判"放不下"，
+   盘面直接砸到 5.6mm 下限（2026-11-13 用户机上正是：每格 5.6mm ＋ 版面仍挤 0.1mm）。
+   0.2mm＝一个二分步长，落到纸上不到 0.6pt，肉眼和打印都看不出，就当它放得下。 */
+var OVER_TOL=0.2,OVER_EL='',TOLF=OVER_TOL,FLOOR_OVER=0;
+function tagOf(e){var c=(''+(e.className||'')).split(' ')[0];
+  return c?'.'+c:e.tagName.toLowerCase();}
+function overBox(box){
+  var k=scaleOf(box),mm=96/25.4*k,br=box.getBoundingClientRect(),cs=getComputedStyle(box),i,e,r;
+  var limT=br.top+(parseFloat(cs.paddingTop)||0)*k,limB=br.bottom-(parseFloat(cs.paddingBottom)||0)*k;
+  var limL=br.left+(parseFloat(cs.paddingLeft)||0)*k,limR=br.right-(parseFloat(cs.paddingRight)||0)*k;
+  var w=0,all=box.querySelectorAll('*');
+  for(i=0;i<all.length;i++){r=all[i].getBoundingClientRect();
+    if(r.width<1||r.height<1)continue;
+    var d=[[r.bottom-limB,'B'],[r.right-limR,'R'],[limL-r.left,'L'],[limT-r.top,'T']],q;
+    for(q=0;q<4;q++){var v=d[q][0]/mm;
+      if(v>w+1e-9){w=v;OVER_EL=F('elOver',{t:tagOf(all[i]),d:T('dir'+d[q][1])});}}}
+  var kids=box.children,vis=[];
+  for(i=0;i<kids.length;i++){e=kids[i];
+    if(e.getBoundingClientRect().height>0&&getComputedStyle(e).display!=='none')vis.push(e);}
+  if(vis.length>1){
+    var lr=vis[vis.length-1].getBoundingClientRect();
+    var gap=(lr.top-vis[vis.length-2].getBoundingClientRect().bottom)/mm;
+    var need=((vis[vis.length-1].className||'').indexOf('ft')>=0?1.5:0.6);
+    if(need-gap>w+1e-9){w=need-gap;
+      OVER_EL=F('elGap',{a:tagOf(vis[vis.length-2]),b:tagOf(vis[vis.length-1]),n:need});}
+  }
+  return w;
+}
+/* raw＝1 时返回未取整的原值，给二分和挑档用（0.1mm 的取整粒度会把 0.06mm 的真余量
+   抬成 0.1mm，再跟容差一比就成了"永远放不下"）；不带参数时取整到 0.1mm，供状态条和回归脚本读数。 */
+function overPct(raw){
+  var ss=document.querySelectorAll('.sheet:not(.answers)'),worst=0,i;
+  for(i=0;i<ss.length;i++){
+    if(ss[i].classList.contains('two')){
+      var hs=ss[i].querySelectorAll('.half'),j;
+      for(j=0;j<hs.length;j++)worst=Math.max(worst,overBox(hs[j]));
+    }else worst=Math.max(worst,overBox(ss[i]));
+  }
+  return raw?worst:Math.round(worst*10)/10;
+}
+function fits(f){FIT=f;paint();return overPct(1)<=TOLF;}
+/* 屏显状态条和二分都用同一个 cellMM，别让"每格 2.8mm"这种缩小预览下的假读数误导判断 */
+function cellMM(){var e=document.querySelector('.sheet:not(.answers) table.board td:not(.rl)');
+  if(!e)return 0;
+  return Math.round(e.getBoundingClientRect().width/(96/25.4*scaleOf(e.closest('.sheet')))*10)/10;}
+/* 二分找"版面允许的最大格子"：FIT=0 就是上限档；放不下就给每格加上收缩量。
+   判据随 FIT 单调（格子越小越不挤），二分比一档档试探快，精度 0.2mm。 */
+function searchFit(){
+  var o0=overPct(1);
+  if(o0<=OVER_TOL)return cellMM();
+  var lo=0,hi=12,g=0;
+  while(hi<30&&!fits(hi))hi=Math.round((hi+6)*10)/10;
+  while(hi-lo>0.2&&g++<20){
+    var mid=Math.round((lo+hi)/2*10)/10;
+    if(mid<=lo||mid>=hi)break;
+    if(fits(mid))hi=mid;else lo=mid;
+  }
+  fits(hi);
+  return cellMM();
+}
+/* 三档紧张度各跑一遍二分，再按"先别挤孩子写字、其次格子最大"挑：
+   0＝说明单栏大字＋集章表常规栏数；1＝说明换两栏＋集章表多分一栏（栏数仍受"并格后
+   这一格写不下 quota 条就少分一栏"约束）；2＝允许破那条约束，换最后的版面空间。
+   0/1 档里只要有一档放得下版面，就绝不用 2 档；三档都放不下（收到 5.6mm 下限还溢出）
+   才退而求其次挑溢出最少的。格子大小只可能随档位上升而变大，所以这样挑不会亏版面。 */
+function fitSheets(){
+  var res=[],i,b;
+  /* 先量"噪声底"：把格子收到下限（5.6mm，再小一年级就写不动了）时，格子驱动的溢出已经
+     基本收干，这时还剩多少就是这台浏览器／缩放比／字体度量下量不出改善的那部分——
+     表格线、行高、页脚外边距的取整都会贡献 ±0.1～0.3mm，而且它跟格子大小无关。
+     判据放宽到 噪声底＋0.05mm，否则二分永远"找不到能装下的那一档"，数表直接砸到下限
+     （2026-11-13 用户在 Safari 里就是这个现象：每格 5.6mm ＋ 版面仍挤 0.1mm，Edge 里正常）。
+     噪声底用 1 档量：0 档的说明单栏在 10×10 全开时本来就装不下，量出来的会是真溢出。 */
+  STG=1;FIT=30;paint();FLOOR_OVER=Math.max(0,overPct(1));
+  /* 放宽到噪声底，但最多只认 1mm：再大就不是取整噪声，而是这份版面真装不下了，
+     那种情况该照旧压格子＋红字报警，而不是把 2mm 内容顶到纸边上。 */
+  TOLF=Math.max(OVER_TOL,Math.min(FLOOR_OVER+0.05,1.0));
+  for(i=0;i<=2;i++){
+    STG=i;FIT=0;paint();
+    var c=searchFit();
+    res.push({stg:i,fit:FIT,cell:c,over:Math.max(0,overPct(1))});
+  }
+  /* 挑档：不是"哪档格子最大就用哪档"，而是"够用就不挤"。
+     先算这套版面挤一挤最多能拿到多大的格子（best），再按 0→1→2 的顺序回头看，
+     哪一档的格子离 best 差不到 1mm 就停在那一档——1mm/格摊到 10×10 整盘才 10mm，
+     小朋友看不出这点差别，但 9pt 单栏说明明显好读。差得超过 1mm 才真算"挤"，
+     这时才换两栏说明、多分一栏集章表（用户定的就是这条）。 */
+  function pick(pool){
+    if(!pool.length)return null;
+    var x=pool[0],best=-1,j;
+    for(j=0;j<pool.length;j++){
+      if(pool[j].over>TOLF)continue;
+      if(pool[j].cell>best)best=pool[j].cell;
+      if(pool[j].over<x.over||(pool[j].over===x.over&&pool[j].cell>x.cell+0.05))x=pool[j];
+    }
+    if(best<0)return x;
+    for(j=0;j<pool.length;j++)
+      if(pool[j].over<=TOLF&&pool[j].cell>=best-1.0)return pool[j];
+    return x;
+  }
+  var ok=[],tight=[],j;
+  for(j=0;j<res.length;j++)(res[j].over<=TOLF?(res[j].stg<=1?ok:tight):[]).push(res[j]);
+  b=pick(ok.length?ok:(tight.length?tight:res));
+  /* 手动 ➕/➖（S.cellAdj，单位 mm/格）：在自动解出来的格子上加减，然后
+     ① 上限＝三档里能装下的最大格子，到顶就停（CELL_CLAMP 记一笔，状态条会说）；
+        下限 6mm，再小一年级就写不动了。
+     ② 定了目标格子后，仍按 0→1→2 取"第一个装得下这个格子的档"——所以 ➕ 会自然
+        把说明逼成两栏、集章表多分一栏；➖ 反过来把腾出的高度还给单栏大说明。
+     ③ FIT＝该档上限格子的收缩量 ＋（该档最大格子 − 目标格子），因为
+        cell = cellCeil − FIT，格子只由 FIT 决定，改 FIT 就等于改格子。 */
+  CELL_AUTO=b.cell;CELL_CLAMP='';
+  if(S.cellAdj){
+    var hi=b.cell;
+    for(j=0;j<res.length;j++)if(res[j].over<=TOLF&&res[j].cell>hi)hi=res[j].cell;
+    /* 二分只精确到 0.2mm，所以"档位上限"可能比纸真正能装的少 0.2mm：➕ 允许再试 0.2，
+       试完用 overPct 复核，真溢出来就退回上限——这样状态条不会在还差一丝的时候乱报"加不动"。 */
+    var want=Math.round((b.cell+S.cellAdj)*10)/10,cand=null,GR=0.2;
+    /* CELL_CLAMP 存的是代码（'hi'/'lo'/'floor'），不是文案——状态条要跟着语言切，
+       拿中文字符串当哨兵值，切英文后 render() 里的比较就全失效了。 */
+    if(want>hi+GR){want=hi;CELL_CLAMP='hi';}
+    if(want<6){want=6;CELL_CLAMP='lo';}
+    for(j=0;j<res.length;j++)
+      if(res[j].over<=TOLF&&res[j].cell+GR>=want-0.001){cand=res[j];break;}
+    if(!cand)CELL_CLAMP='floor';        /* 三档都放不下：手动调不动，只能先关掉别的块 */
+    if(cand){
+      b=cand;STG=b.stg;
+      FIT=Math.round((cand.fit+(cand.cell-want))*100)/100;paint();
+      if(overPct()>0.05&&want>hi){         /* 那 0.2mm 纸不买账，退回上限 */
+        want=hi;CELL_CLAMP='hi';
+        FIT=Math.round((cand.fit+(cand.cell-want))*100)/100;paint();
+      }
+      return overPct();
+    }
+  }
+  STG=b.stg;FIT=b.fit;paint();
+  return b.over;
+}
+function render(){
+  FIT=0;STG=0;
+  var err=paint();
+  var left=fitSheets();
+  var cmm=cellMM();
+  /* 「每格 X mm（已是…最大）」和「版面紧：说明换两栏…」两句删掉：
+     格子尺寸是量测口径，不该混在给老师看的那一行里；要看随时 ?diag=1（fit/noise 两行都在）。
+     状态条只留真出事的那几条：手动调节撞到极限、版面很紧、格子偏小、装不下。 */
+  if(!err&&cmm){
+    if(S.cellAdj&&CELL_CLAMP==='floor')document.getElementById('stat').innerHTML+=
+      '<span style="color:#c47f16">'+T('wFloor')+'</span>';
+    else if(S.cellAdj&&CELL_CLAMP)document.getElementById('stat').innerHTML+=
+      '<span style="color:#c47f16">'+F('wClamp',{c:T(CELL_CLAMP==='hi'?'clampHi':'clampLo')})+'</span>';
+    if(STG>=2)document.getElementById('stat').innerHTML+=
+      '<span style="color:#c47f16">'+T('wTight')+'</span>';
+  }
+  if(!err&&cmm&&cmm<8)document.getElementById('stat').innerHTML+=
+    F('wSmall',{c:cmm,h:S.per===2?(S.stamp?T('wSm2a'):T('wSm2b')):T('wSm1')});
+  if(!err&&left>TOLF)document.getElementById('stat').innerHTML+=
+    '<span style="color:#d64541"><b>'+F('wOver',{m:Math.round(left*10)/10,
+      e:OVER_EL||T('notLocated'),h:S.per===2?T('wOver2'):T('wOver1')})+'</b></span>';
+  /* 余量只剩噪声底：这台浏览器量不出更好的结果了，格子已经按最大出，打印不受影响。
+     不写清楚的话，用户会以为版式又坏了（Safari 上 0.1～0.3mm 那一档）。 */
+  if(!err&&left>OVER_TOL&&left<=TOLF)document.getElementById('stat').innerHTML+=
+    '<span style="color:#8a97a3">'+F('wNoise',{m:Math.round(left*10)/10,
+      e:OVER_EL||T('notLocated')})+'</span>';
+  /* 版本号单独追一句，出错时也要看得见：挂旧标签页打印出小格子，
+     靠这个日期就能一眼判断浏览器里加载的是不是改动之前的代码。 */
+  document.getElementById('stat').innerHTML+=' · <span style="color:#a6b1bb" title="'+
+    T('stBuildTT')+'">'+F('stBuild',{b:BUILD})+'</span>';
+  if(/diag=1/.test(location.search)){
+    var ss=document.querySelectorAll('.sheet'),mm=96/25.4,res=[],fails=[];
+    function probe(s){var bad=[],i,k,ans=s.classList.contains('answers');
+      /* 屏显预览缩放过时，getBoundingClientRect 是缩放像素、scrollHeight/padding 是布局像素，
+         两套单位不能混用：矩形一律除 k。 */
+      var kk=scaleOf(s),mk=96/25.4*kk;
+      var ov=Math.round((s.scrollHeight-s.clientHeight)/(96/25.4)*10)/10;
+      if(ov>0.2)bad.push('页面溢出'+ov+'mm');
+      for(i=0;i<s.children.length;i++){k=s.children[i];
+        if(k.scrollHeight>k.clientHeight+1)bad.push('裁切:'+k.className);}
+      var ft=s.querySelector('.ft'),pv=ft?ft.previousElementSibling:null;
+      if(ft&&pv){var gp=(ft.getBoundingClientRect().top-pv.getBoundingClientRect().bottom)/mk;
+        if(gp<-0.15)bad.push('压住页脚');
+        else if(gp<1.2)bad.push('页脚间隙仅'+Math.round(gp*10)/10+'mm');}
+      if(!ans){var lim=s.getBoundingClientRect().bottom-(parseFloat(getComputedStyle(s).paddingBottom)||0)*kk,low=-1e9;
+        for(i=0;i<s.children.length;i++){var cb=s.children[i].getBoundingClientRect();
+          if(cb.height>0)low=Math.max(low,cb.bottom);}
+        var ob=Math.round((low-lim)/mk*10)/10;
+        if(ob>0.2)bad.push('顶穿下边距'+ob+'mm');}
+      return bad;}
+    for(var i=0;i<ss.length;i++){
+      var f=ss[i].querySelector('.ft');
+      res.push({cls:ss[i].classList.contains('answers')?'A':'S',
+        hmm:Math.round(ss[i].scrollHeight/mm*10)/10,
+        footmm:f?Math.round(f.getBoundingClientRect().bottom/(96/25.4*scaleOf(ss[i]))*10)/10:null,
+        mb:(function(){var sh=ss[i],kk=scaleOf(sh),mk=96/25.4*kk;
+          var r0=sh.getBoundingClientRect();
+          var lim=r0.bottom-(parseFloat(getComputedStyle(sh).paddingBottom)||0)*kk,low=-1e9,q;
+          for(q=0;q<sh.children.length;q++){var cb=sh.children[q].getBoundingClientRect();
+            if(cb.height>0)low=Math.max(low,cb.bottom);}
+          return Math.round((lim-low)/mk*10)/10;})(),
+        bad:probe(ss[i]).join('|')||''});
+      if(probe(ss[i]).length&&!ss[i].classList.contains('answers'))fails.push('S'+(i+1));
+    }
+    document.getElementById('diag').textContent='DIAG ['+JSON.stringify({
+      n:ss.length,pages:res,
+      fit:(fails.length||overPct()>TOLF)?('FAIL '+(fails.join(',')||'')+' 余'+overPct()+'mm'):'ALL-FIT',
+      /* 换浏览器出问题时先看这一行：floor＝收到下限后仍消不掉的残差（噪声底），
+         tol＝这台浏览器上"算装得下"的实际判据，el＝贡献最大的那块，k/dpr＝预览缩放比与设备像素比。
+         Edge 里 floor 通常 ≤0.05；某个浏览器里突然冒出 0.1～0.3，就是它取整方式不同，版面已经按最大格子出了。 */
+      noise:{floor:+FLOOR_OVER.toFixed(2),tol:+TOLF.toFixed(2),el:OVER_EL,
+             dpr:devicePixelRatio,k:scaleOf(document.querySelector('.sheet:not(.answers)')||document.body)},
+      answerA4:(function(){var a=document.querySelectorAll('.sheet.answers'),x=[];
+        for(var j=0;j<a.length;j++)x.push(Math.ceil(a[j].scrollHeight/mm/297));return x.join('/')+' 页';})()})+']';
+  }
+}
+function segBind(id,key,cast){
+  document.getElementById(id).addEventListener('click',function(ev){
+    var b=ev.target.closest('button');if(!b)return;
+    S[key]=cast?cast(b.dataset.v):b.dataset.v;sync();render();
+  });
+}
+function chipBind(id,key,list){
+  var el=document.getElementById(id),h='',i;
+  for(i=0;i<list.length;i++)h+='<button class="chip" data-v="'+list[i]+'">'+list[i]+'</button>';
+  el.innerHTML=h;
+  el.addEventListener('click',function(ev){
+    var b=ev.target.closest('.chip');if(!b)return;
+    var v=+b.dataset.v,a=S[key],i=a.indexOf(v);
+    if(i>=0)a.splice(i,1);else{a.push(v);a.sort(function(x,y){return x-y;});}
+    sync();render();
+  });
+}
+function applyPreset(p){
+  var q=PRESETS[p];if(!q)return;
+  S.sum=q.sum.slice();S.diff=q.diff.slice();S.mul=q.mul.slice();S.quota=q.quota;sync();render();
+}
+function sync(){
+  [].forEach.call(document.querySelectorAll('#segSize button'),function(b){b.classList.toggle('on',+b.dataset.v===S.size);});
+  [].forEach.call(document.querySelectorAll('#segMode button'),function(b){b.classList.toggle('on',b.dataset.v===S.mode);});
+  [].forEach.call(document.querySelectorAll('#segQuota button'),function(b){b.classList.toggle('on',+b.dataset.v===S.quota);});
+  [].forEach.call(document.querySelectorAll('#chipsSum .chip'),function(b){b.classList.toggle('on',S.sum.indexOf(+b.dataset.v)>=0);});
+  [].forEach.call(document.querySelectorAll('#chipsDiff .chip'),function(b){b.classList.toggle('on',S.diff.indexOf(+b.dataset.v)>=0);});
+  [].forEach.call(document.querySelectorAll('#chipsMul .chip'),function(b){b.classList.toggle('on',S.mul.indexOf(+b.dataset.v)>=0);});
+  [].forEach.call(document.querySelectorAll('.presets button,.presets2 button'),function(b){
+    var q=PRESETS[b.dataset.p];
+    b.classList.toggle('on',!!q&&same(q.sum,S.sum)&&same(q.diff,S.diff)&&same(q.mul,S.mul)&&q.quota===S.quota);
+  });
+  document.getElementById('seed').value=S.seed;
+  document.getElementById('copies').value=S.copies;
+  document.getElementById('withAns').checked=S.withAns;
+  document.getElementById('withHdr').checked=S.hdr;
+  document.getElementById('withStamp').checked=S.stamp;
+  document.getElementById('withFoot').checked=S.foot;
+  var rl=document.getElementById('withRule');
+  rl.checked=S.rule; rl.disabled=(S.per===2);
+  rl.parentNode.style.opacity=rl.disabled?'0.4':'';
+  [].forEach.call(document.querySelectorAll('#segPer button'),function(b){b.classList.toggle('on',+b.dataset.v===S.per);});
+  /* 手动调格子的状态写在按钮自己身上：自动时它写着「自动」，手动时写成「+2mm」，点一下回自动。
+     原来那句「自动（能多大就多大）/手动 +2mm 恢复自动」是行尾的一个独立 span，
+     多它一句这行就宽 110px、➕ 一按就折成四行；写进按钮后两种状态行宽一致。 */
+  var ca=document.getElementById('cellAuto'),sgn=(S.cellAdj>0?'+':'')+S.cellAdj;
+  [].forEach.call(document.querySelectorAll('#segLang button'),function(b){b.classList.toggle('on',b.dataset.v===S.lang);});
+  ca.classList.toggle('on',S.cellAdj===0);
+  ca.textContent=S.cellAdj===0?T('cellAutoBtn'):sgn+'mm';
+  ca.title=S.cellAdj===0?T('cellAutoTT'):F('cellManualTT',{v:sgn,a:CELL_AUTO});
+}
+function same(a,b){
+  if(a.length!==b.length)return false;
+  for(var i=0;i<a.length;i++)if(a[i]!==b[i])return false;
+  return true;
+}
+function range(lo,hi){var o=[],i;for(i=lo;i<=hi;i++)o.push(i);return o;}
+function params(){
+  var u=new URLSearchParams(location.search);
+  if(u.get('lang'))S.lang=u.get('lang')==='en'?'en':'zh';
+  if(u.get('size'))S.size=+u.get('size');
+  if(u.get('mode'))S.mode=u.get('mode');
+  if(u.get('quota'))S.quota=Math.max(1,Math.min(4,+u.get('quota')));
+  if(u.get('seed'))S.seed=+u.get('seed');
+  if(u.get('copies'))S.copies=Math.max(1,Math.min(6,+u.get('copies')));
+  if(u.has('sum'))S.sum=u.get('sum')===''?[]:u.get('sum').split(',').map(Number);
+  if(u.has('diff'))S.diff=u.get('diff')===''?[]:u.get('diff').split(',').map(Number);
+  if(u.has('mul'))S.mul=u.get('mul')===''?[]:u.get('mul').split(',').map(Number);
+  if(u.get('ans'))S.withAns=u.get('ans')==='1';
+  if(u.get('rule'))S.rule=u.get('rule')==='1';
+  if(u.get('hdr'))S.hdr=u.get('hdr')==='1';
+  if(u.get('stamp'))S.stamp=u.get('stamp')==='1';
+  if(u.get('foot'))S.foot=u.get('foot')==='1';
+  if(u.get('adj'))S.cellAdj=Math.max(-8,Math.min(8,+u.get('adj')||0));
+  if(u.get('per')){
+    var p2=u.get('per')==='2'?2:1;
+    S.per=p2;
+    if(p2===2){if(!u.has('stamp'))S.stamp=false;if(!u.has('foot'))S.foot=false;}
+  }
+  if(u.get('p'))applyPreset(u.get('p'));
+}
+document.getElementById('print').onclick=function(){window.print();};
+document.getElementById('reroll').onclick=function(){S.seed=randInt(mulberry32(Date.now()&0xffffffff),99999999)+1;sync();render();};
+document.getElementById('seed').onchange=function(){S.seed=+this.value||1;render();};
+document.getElementById('copies').onchange=function(){S.copies=Math.max(1,Math.min(6,+this.value||1));render();};
+document.getElementById('withAns').onchange=function(){S.withAns=this.checked;render();};
+document.getElementById('withRule').onchange=function(){S.rule=this.checked;render();};
+document.getElementById('withHdr').onchange=function(){S.hdr=this.checked;render();};
+document.getElementById('withStamp').onchange=function(){S.stamp=this.checked;render();};
+document.getElementById('withFoot').onchange=function(){S.foot=this.checked;render();};
+/* ➕➖ 每按一次改 1mm/格，范围 ±8mm；「自动」归零。上限由 fitSheets 兜住，
+   按到纸装不下时格子不再变、状态条会写"加不动了"，不会出现溢页或空白页。 */
+function cellAdj(d){S.cellAdj=Math.max(-8,Math.min(8,S.cellAdj+d));sync();render();}
+document.getElementById('cellPlus').onclick=function(){cellAdj(1);};
+document.getElementById('cellMinus').onclick=function(){cellAdj(-1);};
+document.getElementById('cellAuto').onclick=function(){S.cellAdj=0;sync();render();};
+document.getElementById('presets').addEventListener('click',function(ev){var b=ev.target.closest('button');if(b)applyPreset(b.dataset.p);});
+document.getElementById('presetsMul').addEventListener('click',function(ev){var b=ev.target.closest('button');if(b)applyPreset(b.dataset.p);});
+segBind('segSize','size',function(v){return +v;});
+segBind('segQuota','quota',function(v){return +v;});
+segBind('segMode','mode');
+/* 切到「一页两卷」时半页放不下算式表和页脚，先自动关掉（用户可以再勾回来）；
+   切回「一页一卷」时恢复默认。玩法说明在双盘下由 useRule() 强制不印。 */
+document.getElementById('segPer').addEventListener('click',function(ev){
+  var b=ev.target.closest('button');if(!b)return;
+  var v=+b.dataset.v;
+  if(v!==S.per){S.per=v;S.stamp=(v===2)?false:true;S.foot=(v===2)?false:true;}
+  sync();render();
+});
+chipBind('chipsSum','sum',range(0,MAXV));
+chipBind('chipsDiff','diff',range(0,DG));
+chipBind('chipsMul','mul',MUL_TARGETS);
+document.getElementById('segLang').addEventListener('click',function(ev){
+  var b=ev.target.closest('button');if(b)switchLang(b.dataset.v);});
+/* 屏显预览比例：窗口放不下 210mm 宽的纸就按比例缩，放得下就 1:1（见 @media screen 那条）。
+   版面量测统一走 scaleOf()＝实测宽/布局宽，所以这个比例取多少都不影响解出来的格子大小，
+   状态条上的「每格 X mm」永远是纸上的真实毫米数，不会再出现"纸上 17.2、屏幕上看着像 8"。 */
+function pvScale(){
+  var k=Math.min(1,(document.documentElement.clientWidth-28)/(210*96/25.4));
+  k=Math.max(.3,Math.round(k*1000)/1000);
+  document.documentElement.style.setProperty('--pv',k);return k;}
+pvScale();addEventListener('resize',pvScale);
+/* 语言初值优先级：?lang= ＞ 这台机器上次选的（localStorage）＞ 浏览器语言。
+   自己打开还是中文；文件发给别人，对方一打开就是他的语言。
+   localStorage 在 file:// 下可能被禁写，读也一样包一层——拿不到就退回浏览器语言。 */
+function langInit(){
+  var u=new URLSearchParams(location.search),l=u.get('lang');
+  if(l!=='en'&&l!=='zh'){try{l=localStorage.getItem('gridpaint.lang');}catch(e){l=null;}}
+  if(l!=='en'&&l!=='zh')l=/^zh/i.test(navigator.language||'')?'zh':'en';
+  S.lang=l;
+}
+langInit();params();setKLang(S.lang);applyLang();sync();render();
+window.GK={mulberry32:mulberry32,randInt:randInt,allEdges:allEdges,parity:parity,coord:coord,
+  edgesOf:edgesOf,eqOf:eqOf,digitsFor:digitsFor,plant:plant,maxMatching:maxMatching,
+  buildBoard:buildBoard,audit:audit,PRESETS:PRESETS,MAXV:MAXV,DG:DG,HEX:HEX,
+  evalPair:evalPair,factorPairs:factorPairs,MUL_TARGETS:MUL_TARGETS,isMulTarget:isMulTarget,
+  cnNum:cnNum,guoju:guoju,mulForms:typeof mulForms==='function'?mulForms:null,KINDS:KINDS,
+  setKLang:setKLang,S:S,T:T,F:F};
+</script>
+</body>
+</html>
