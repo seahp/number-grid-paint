@@ -11,7 +11,7 @@ description: 生成可打印的「数格涂涂」数学游戏卷（A4，单文�
 description_zh: 给一年级（含表内乘法阶段）出一份双击即用的数学游戏卷。一个 10×10 或 8×8 数字盘，孩子把上下左右相邻的两格凑成目标数的和、差或积，涂色并在集章表写算式；能选难度包、一次出 1–6 份、A4 一页两卷裁开、双人抢格对战，同一个种子永远出同一套题，答案页自带算式清单。界面和纸面都能切中英文。全程本地运行，不联网、不装任何东西。
 description_en: A printable math-game worksheet that lives in one offline HTML file. Kids find pairs of cells that touch up, down, left or right whose sum, difference or product equals a target number, colour both cells and write the equation on the stamp card. It offers difficulty presets, 1-6 sets per run, two-up A4 sheets with a cut line, a two-player cell battle mode and reproducible seeds, plus a teacher answer page. Fully bilingual (interface and printed page). No build, no network, no dependencies.
 category: education
-version: 1.0.1
+version: 1.0.2
 author: 粉笔与代码
 homepage: https://github.com/seahp/number-grid-paint
 ---

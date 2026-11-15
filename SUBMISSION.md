@@ -35,16 +35,16 @@ python3 scripts/leak_scan.py --strict        # 名单词表没声明也算失败
 **包内字节** + 三份目录），所以"忘了跑"这条路被堵了一半；
 但**发布动作本身仍然要再跑一次**，因为你 push 的可能是上一轮构建的旧 dist。
 
-## 1. 现在的发布状态（2026-11-15 晚，1.0.1 待发）
+## 1. 现在的发布状态（2026-11-15 深夜，1.0.2）
 
 | 平台 | 状态 | 说明 |
 | --- | --- | --- |
-| SkillHub | **线上 v1.0.0，1.0.1 待发** | https://skillhub.cn/skills/user_1db801dd/number-grid-paint （skillId 322080）；`skillhub install` 已跑通，签名校验通过，内容指纹 `ef3e1ecf…10bee4`。1.0.1 走哪条路上架见第 5 节 |
-| GitHub | **线上 v1.0.0，1.0.1 待推** | https://github.com/seahp/number-grid-paint （Public，`main`，22 个文件）；线上 tarball 拉回来重扫 **0 命中**，见第 3 节 |
-| WorkBuddy 开放平台 | **1.0.0 被驳回，整改后待重投** | 技能ID `os_e14f55c59b56dd6c`，分类「教育学习」，**免费**（未勾付费/内购）。驳回原文与整改见第 4 节 |
+| GitHub | **v1.0.2 已上线** | https://github.com/seahp/number-grid-paint （Public，`main`，提交 `deb1811`）；线上 tarball 拉回来重扫 **0 命中**，`assets/preview.png` / 主产物 / README 三条 raw 地址都是 200，见第 3 节 |
+| SkillHub | **线上仍是 v1.0.0；本轮发 1.0.2** | https://skillhub.cn/skills/user_1db801dd/number-grid-paint （skillId 322080）。1.0.1 那次上传被 `400 不允许的文件类型: assets/preview.png` 整包拒收，**但版本号占上了**——`install` 下来那份 `SKILL.md` 写着 `version: 1.0.0`，即 1.0.1 是个空号。所以这一轮换 1.0.2 发，不删条目，见第 5 节 |
+| WorkBuddy 开放平台 | **1.0.0 被驳回，整改后的 zip 已备好待重投** | 技能ID `os_e14f55c59b56dd6c`，分类「教育学习」，**免费**（未勾付费/内购）。驳回原文与整改见第 4 节 |
 
 线上那三份是**做这套审查之前**的物料打的包。评测回来了两条意见，都属于"文档与包不一致"，
-不是成品质量问题，所以 1.0.1 专门修它们：
+不是成品质量问题，所以 1.0.2 专门修它们：
 
 - "按说明直接运行检查命令可能找不到文件，发布相关内容也不够齐全"；
 - 可靠性口径："核心出题和打印整体稳定，出错时也有易懂提示"，但"检查和打包流程与实际文件
@@ -60,7 +60,7 @@ python3 scripts/leak_scan.py --strict        # 名单词表没声明也算失败
 | 文档说了但文件不在（平台机械解析） | 精简包不带脚本，SKILL.md 却写着 `scripts/pdf_export.py` | 源文档按布局分叉（`lite:skip` / `lite:only` / `repo:skip`），出包前由 `doc_check.check_skillmd()` 逐行验两个包，不一致就打不出 zip |
 
 "只要没问题就不用重发"这条用户决定仍然有效：线上那三份内容本身没有事实错误，
-1.0.1 是**为了解决评测指出的可复现性问题**而发，不是补救错误内容。
+1.0.2 是**为了解决评测指出的可复现性问题**而发，不是补救错误内容。
 
 ---
 
@@ -217,7 +217,7 @@ Settings → Pages → Deploy from branch → `main` / `/`，再把
 | 名称 / display_name | 数格涂涂 · 数学涂色游戏卷生成器 |
 | 英文名 / display_name_en | Number Grid Paint Worksheet Generator |
 | 分类 | education（教育） |
-| 版本 | 1.0.1 |
+| 版本 | 1.0.2 |
 | 作者 | 粉笔与代码 |
 | 简介（中） | 抄 `description_zh` |
 | 简介（英） | 抄 `description_en` |
@@ -295,7 +295,7 @@ python3 <项目路径>/scripts/leak_scan.py ./skills    # 对下载回来的包�
 后续更新只改 `SKILL.md` frontmatter 里的 `version`（和 HTML 里的注释日期），重跑
 `make_dist.py` 再 `publish`，不要手改 zip。
 
-### 5.1 这一轮（1.0.1）：详情页要把 GitHub 链接露出来
+### 5.1 这一轮（1.0.2）：详情页要把 GitHub 链接露出来
 
 SkillHub 的详情页「概述」渲染的是 **SKILL.md 正文**，`homepage` 字段根本不显示，
 所以链接写在正文第一屏：「源码仓库：<https://github.com/seahp/number-grid-paint>」。
@@ -308,18 +308,25 @@ SkillHub 的详情页「概述」渲染的是 **SKILL.md 正文**，`homepage` �
 
 两条路，按代价从小到大：
 
-1. **先走 publish（推荐，先试这条）**：本地这份 1.0.1 与线上 1.0.0 的文件差异是**真实的**
-   （多出 `CHANGELOG.md`、`references/publishing.md`、`scripts/doc_check.py`、`assets/preview.png`，
-   SKILL.md/README 正文重写，`env.py`/`verify.mjs`/`leak_scan.py` 都改过），
+1. **先走 publish（推荐，先试这条）**：本地这份 1.0.2 与线上 1.0.0 的文件差异是**真实的**
+   （多出 `CHANGELOG.md`、`references/publishing.md`、`scripts/doc_check.py`、
+   `scripts/gap_probe.py`·`half_probe.py`，SKILL.md/README 正文重写，
+   `env.py`/`verify.mjs`/`leak_scan.py` 都改过；成品截图**不在包里**，见第 5.3 节），
    所以按内容指纹判重不会撞上"没有变化"：
 
    ```bash
    python3 scripts/leak_scan.py dist/number-grid-paint-skillhub.zip   # 纪律：退出码 0 才出门
    ~/.local/bin/skillhub --skip-self-upgrade publish dist/number-grid-paint-skillhub.zip --dry-run
    ~/.local/bin/skillhub --skip-self-upgrade publish dist/number-grid-paint-skillhub.zip \
-     --version 1.0.1 --changelog "修复：文档与包内文件逐条对齐（技能包布局下所有检查命令可直接执行）；\
-   新增 references/publishing.md、CHANGELOG.md 与成品截图；SKILL.md 正文第一屏给出源码仓库地址。玩法与版面未改。"
+     --version 1.0.2 --changelog "修复：文档与包内文件逐条对齐（技能包布局下所有检查命令可直接执行）；\
+   新增 references/publishing.md、CHANGELOG.md；SKILL.md 正文第一屏给出源码仓库地址，成品截图引仓库里的地址。玩法与版面未改。"
    ```
+
+   **实际踩到的岔子（2026-11-15）**：第一次按 1.0.1 发，`--dry-run` 是过的
+   （`✓ Dry-run passed: number-grid-paint@1.0.1`），真发却先被 `400 不允许的文件类型` 打回，
+   改好包再发又报 `slug 冲突: 版本 1.0.1 已存在`——**拒收的上传照样把版本号占掉了**。
+   `install` 下来一看，那个 1.0.1 记录里的 `SKILL.md` 还写着 `version: 1.0.0`，是个空号。
+   结论：不要为了"重发"去删条目，**换一个号发就行**；线上到底哪一版以包内容为准，别信版本号。
 
    发布后**把线上那份拉回来重扫 + 重跑文档命令**（第 5 节上面那三条），确认详情页
    概述里能看到仓库地址、包里能 `node scripts/verify.mjs` 跑通。
@@ -339,7 +346,7 @@ SkillHub 的详情页「概述」渲染的是 **SKILL.md 正文**，`homepage` �
 Error: 请求失败 (400): 不允许的文件类型: assets/preview.png
 ```
 
-扩展名过滤不只是"没扩展名的文件"，**png 也不在允许清单里**。所以 1.0.1 的处理是：
+扩展名过滤不只是"没扩展名的文件"，**png 也不在允许清单里**。所以 1.0.2 的处理是：
 截图只随仓库出门（`dist/repo/assets/preview.png`），两个市场包都不带图片，
 `SKILL.md` / `README.md` 里那一处图引用用 `zip:only` 写成 GitHub 的绝对地址
 `https://raw.githubusercontent.com/seahp/number-grid-paint/main/assets/preview.png`，
@@ -366,7 +373,7 @@ CC BY-NC-SA 4.0 意味着别人可以免费转发和改编，但必须署名、�
 线上也复查过：SkillHub 的包能装、签名与内容指纹一致；GitHub 的 `main` tarball
 拉回来重扫 **0 命中**，`raw.githubusercontent.com` 上主产物与 README 都是 200。
 
-**1.0.1 这轮按评测员的做法重演了一遍**（不是"应该能跑"，是解压出来逐条敲）：
+**1.0.2 这轮按评测员的做法重演了一遍**（不是"应该能跑"，是解压出来逐条敲）：
 
 ```bash
 rm -rf /tmp/gp101 && mkdir /tmp/gp101 && unzip -q dist/number-grid-paint-skillhub.zip -d /tmp/gp101
@@ -390,7 +397,7 @@ python3 scripts/shot.py /tmp/屏显.png '?size=10&lang=en' all
 精简包（`number-grid-paint-openplatform.zip`，7 个文件）单独核对：SKILL.md 渲染后
 没有残留布局标记、只提到包里真有的路径（`assets/数格涂涂_生成器.html`、
 `assets/preview.png`、`references/rules-and-generation.md`、`README.md`、`CHANGELOG.md`、
-`LICENSE.txt`），frontmatter 是官方 9 字段、`version: 1.0.1`。
+`LICENSE.txt`），frontmatter 是官方 9 字段、`version: 1.0.2`。
 
 **没检查**：开放平台的第二次审核结论（要重投之后才有）、SkillHub 线上详情页渲染效果
 （发出去之后我用 `install` 拉回来核，不在本地臆测）、

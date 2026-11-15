@@ -104,7 +104,8 @@ def logical_line(lines, i):
     back = 0
     while j >= 1 and back < 2:
         prev = lines[j - 1].strip()                # 行号 j → 下标 j-1
-        if (not prev or prev.startswith(('#', '```', '|', '-', '*'))
+        # 断句标记要带空格才算：`**粗体**` 开头的行仍然是同一句，别当列表项断开
+        if (not prev or prev.startswith(('#', '```', '| ', '- ', '* '))
                 or prev.endswith(('：', ':', '。', '！', '？'))):
             break
         out.insert(0, prev)
@@ -127,6 +128,9 @@ def _selftest():
     assert '仓库' in logical_line(L, 4), logical_line(L, 4)
     assert '仓库' not in logical_line(L, 6), logical_line(L, 6)
     assert '仓库' not in logical_line(L, 8), logical_line(L, 8)
+    M = ['**被拒收的上传占号讲的是仓库里的流程**，那次把截图也打进了包',
+         '于是报 400：assets/preview.png']           # 粗体开头的折行仍是同一句
+    assert '仓库' in logical_line(M, 2), logical_line(M, 2)
     return '折行算同一句；句号/空行/新列表项会断开'
 
 
