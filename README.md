@@ -109,8 +109,6 @@ python3 scripts/shot.py out/屏显.png '?size=10&lang=en' all     # 仓库里：
 python3 scripts/make_dist.py --strict   # 仓库里的打包脚本
 ```
 
-出三份物料：`dist/repo/`（GitHub 仓库目录）、`dist/number-grid-paint-skillhub.zip`、
-`dist/number-grid-paint-openplatform.zip`（WorkBuddy 开放平台，精简包）。
 preflight 会拦下缺文件、缺许可全文、HTML 里出现网络请求、frontmatter 字段不全、
 **文档与实际文件不一致**、以及**未脱敏内容**这几类问题。
 
